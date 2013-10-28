@@ -1,7 +1,7 @@
 WP-App
 =====
 
-RAD "framework" for WordPress.
+RAD "framework" for WordPress. Still a work-in-progress.
 
 This plug-in allows you to extend WordPress by creating new data objects in non-core tables.
 
@@ -59,10 +59,10 @@ class My_Schema extends Schema {
 The Schema class (abstract) has two methods:
 
 * `get_field_format($name)` - returns the sprintf-like format string used in `$wpdb->prepare()` calls: `%d` (int), `%f` (float), or `%s` (string) [default].
-* `get_field_length($name)` - returns the maximum number of characters allowed for a field. e.g. in Company_Schema above, a `sector` would return `32`.
+* `get_field_length($name)` - returns the maximum number of characters allowed for a field. e.g. in My_Schema above, `type` would return `24`.
 
 
-###Models
+##Models
 
 Models do most of the heavy lifting, such as querying the database and creating Objects from results. They require a Schema for construction.
 
@@ -185,3 +185,99 @@ class Postx_Object extends Object {
 
 ```
 
+##Managers
+
+Managers are used to get instances of components. They implement the interface `ManagerInterface`.
+
+To use a new data object, it first has to be registered with a Manager via its `register_type()` method.
+
+
+##Registries
+
+Registries are exactly what they sound like - a registry for a type of component. 
+
+There are 3 default registries:
+1. SchemaRegistry - the registry for Schemas
+2. ModelRegistry - the registry for Models
+3. ManagerRegistry - the registry for Managers
+ 
+
+Registries implement the `RegistryInterface` interface, which includes two methods: `get()` and `classFromName()`.
+
+Calling the `get()` method with no parameters returns all of the registry's objects (e.g. `SchemaRegistry::get()` returns all known Schemas).
+
+Specify a `$name` - e.g. `SchemaRegistry::get('butter')` - and the Registry will return the corresponding component object. 
+
+*Names are converted to classes using each Registry's `classFromName()` method.*
+
+Example:
+
+```php
+
+class SchemaRegistry implements RegistryInterface {
+	
+	function get( $name = null ){
+		// see file
+	}
+	
+	function classFromName( $name ){
+		// removes '_Model' from name 
+		$class = str_replace('_Model', '', $name);
+		// converts 'my-brown-shoe' to 'MyBrownShoe'
+		$class = trim(str_replace(' ', '', ucwords(str_replace('-', ' ', $class))));
+		// add '_Schema' to end
+		if ( strpos($class, '_Schema') === false )
+			$class .= '_Schema';
+		return $class;
+	}
+	
+}
+
+```
+
+So calling `SchemaRegistry:get('my-thing')` returns `MyThing_Schema`.
+
+
+####OK, I Lied
+
+There is only 1 registry that should be called directly - the `ManagerRegistry` - and usually just its `register()` method. 
+
+Calling `register()` on the `ManagerRegistry` (ready?) *registers* a *`Manager`*.
+
+Example:
+
+```php
+
+ManagerRegistry::instance()	// use instanced calls for speed
+	->register('donut');	// corresponds to "DonutManager"
+
+```
+
+And suppose DonutManager has defined its model names like so:
+
+```php
+
+class DonutManager implements ManagerInterface {
+	
+	//... some methods - see file
+	
+	function get_model($type){
+	
+		return ModelRegistry::get( $type . '_Donut_Model' );
+	
+	}
+	
+	// ... more methods
+}
+
+```
+
+Now that we have registered the DonutManager, we can use it to register data types:
+
+```php
+
+DonutManager::instance()
+	->register_type('normal')		// corresponds to Normal_Donut_Model, Normal_Donut_Schema
+	->register_type('stick-shaped');	// corresponds to StickShaped_Donut_Model, StickShaped_Donut_Schema
+
+```
