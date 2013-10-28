@@ -3,10 +3,10 @@ WP-App
 
 RAD "framework" for WordPress.
 
-This plugin allows you to extend WordPress and create new data objects in non-core tables.
+This plug-in allows you to extend WordPress by creating new data objects in non-core tables.
 
 
-##Basics
+#Basics
 
 The plugin has a few primary components:
 
@@ -18,37 +18,37 @@ The plugin has a few primary components:
 
 The components are generally used from the bottom up - you'll often call Manager and Registry methods, sometimes call Object and Model methods, and rarely call Schema methods (directly, that is).
 
-###Schemas
+##Schemas
 
-Schemas define database tables using an SQL-like format:
+Schemas define database tables using an SQL-like format. They are basically static includes, with a couple helper methods.
+
+Example:
 
 ```php
 
-class Company_Schema extends Schema {
+class My_Schema extends Schema {
         
-        public $table_basename = 'companies';
+        public $table_basename = 'mydata';
         
         public $field_names = array(
                 'id'                    => "bigint(20) NOT NULL",
-                'ticker'                => "varchar(8) NOT NULL default ''",
-                'cik'                   => "varchar(32) default NULL",
-                'exchange'              => "varchar(8) default NULL",
-                'sic'                   => "int(8) default NULL",
-                'sector'                => "varchar(32) default NULL",
+                'name'                  => "varchar(50) NOT NULL default ''",
+                'url'                   => "text default NULL",
+                'type'                  => "varchar(24) NOT NULL",
                 // ...
         );
         
         public $primary_key = 'id';
         
         public $unique_keys = array(
-                'ticker'                => 'ticker',
-                'cik'                   => 'cik',
+                'name'                => 'name',
+                'url'                 => 'url',
         );
         
         public $keys = array(
-                'exchange'              => 'exchange',
-                'sic'                   => 'sic',
-                'sector'                => 'sector',
+                'type'                => 'type',
+                'type__id'            => 'type, id',
+                'type__name'          => 'type, name',
                 // ...
         );
         
@@ -87,26 +87,100 @@ class My_Model extends Model {
         );
         
         protected $after_update_field = array(
-                'ticker' => 'this.ticker_was_updated',
+                'url' => 'this.url_was_updated',
         );
         
         function before_insert() {
                 // do something before inserting
         }
         
-        function ticker_was_updated(){
-                echo 'The ticker was just updated!';
+        function url_was_updated(){
+                echo 'The URL was just updated!';
         }
         
 }
 
-// The following is just illustrative - you should *not* create objects using the 'new' keyword:
+// NOTE: the following is just illustrative - you should *not* create objects using the 'new' keyword!
 
 $my_schema = new My_Schema();
 $my_model = new My_Model( $my_schema );
 
 // $my_object will be an instance of 'My_Object' (as defined above)
 $my_object = $my_model->get_row( "SELECT * FROM {$my_schema->table} WHERE id = 2" );
+
+
+```
+
+##Objects
+
+Objects are arbitrary data objects, and by default have very little functionality. They are essentially containers for database rows.
+
+Upon creation (i.e. via its model's `forgeObject()` call), each column (i.e. field) becomes an Object variable.
+
+Objects have a constructor (which can be overwritten) and 3 magic methods: `__get()`, `__set()`, and `__isset()`.
+
+Below is an example of the Postx (Post extension) Object:
+
+```php
+
+
+class Postx_Object extends Object {
+	
+	public $post;
+	
+	/**
+	* Sets up object from db result and uses $wp_post param 
+	* or global $post to set post property.
+	*/
+	function __construct( &$db_object, &$wp_post = null ){
+		
+		global $post;
+		
+		// this is copied from abstract Object constructor
+		foreach($db_object as $key => $val){
+			$this->$key = $val;	
+		}
+		
+		// this is the custom constructor functionality
+		
+		if ( null !== $wp_post ){
+			$this->setPost($wp_post);
+		}
+		// current post? Avoid the get_post() call
+		elseif ( $post->ID == $this->id ){
+			$this->setPost($post);
+		}
+		else {
+			$this->setPost($post->ID);
+		}
+		
+	}
+	
+	// allow access to post fields.
+	// e.g. $this->__get('post_name') => $this->post->post_name
+	function __get( $var ){
+	
+		if ( strpos($var, 'post_') === 0 ){
+			return isset($this->post->$var) ? $this->post->$var : NULL;	
+		}
+		return isset($this->$var) ? $this->$var : NULL;	
+	}
+	
+	// Sets the post using an ID or object
+	protected function setPost(&$post){
+		
+		if ( is_object($post) ){
+			$this->post =& $post;
+		}
+		elseif ( is_numeric($post) ){
+			$this->post =& get_post($post, OBJECT);
+		}
+	}
+	
+	public function get_post_field( $name ){
+		return isset($this->post->$name) ? $this->post->$name : NULL;	
+	}
+}
 
 
 ```
