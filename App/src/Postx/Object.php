@@ -4,26 +4,21 @@ class Postx_Object extends Object {
 	
 	public $post;
 	
+	public $the_post = false;
+	
 	/**
-	* Sets up object properties from db result and uses either
-	* $wp_post param or global $post to set post property.
+	* Overwriting Object constructor
+	* Sets properties from db result, adds $post using param or global
 	*/
 	function __construct( &$db_object, &$wp_post = null ){
 		
-		global $post;
+		$this->import($db_object);
 		
-		foreach($db_object as $key => $val){
-			$this->$key = $val;	
-		}
-		
-		if ( null !== $wp_post ){
-			$this->setPost($wp_post);
-		}
-		elseif ( $post->ID == $this->id ){
-			$this->setPost($post);
+		if ( null === $wp_post ){
+			$this->importPost($GLOBALS['post']);
 		}
 		else {
-			$this->setPost($post->ID);
+			$this->importPost($wp_post);
 		}
 		
 	}
@@ -35,23 +30,29 @@ class Postx_Object extends Object {
 		return isset($this->$var) ? $this->$var : NULL;	
 	}
 	
-	// Sets the post using an ID or object
-	protected function setPost(&$post){
+	// Sets the post 
+	protected function importPost(&$post){
 		
-		if ( is_object($post) ){
+		if ( is_object($post) ) {
+			
+			if ( $post->ID == $this->id )
+				$this->the_post = true;
+			
 			$this->post =& $post;
 		}
-		elseif ( is_numeric($post) ){
+		else if ( is_numeric($post) ){
+			
 			$this->post =& get_post($post, OBJECT);
 		}
-			
+	
 	}
 	
 	
-	/** Post field getters */
-	
-	public function get_post_field( $name ){
-		return isset($this->post->$name) ? $this->post->$name : NULL;	
+	function __sleep(){
+		$this->the_post = false;	
 	}
-		
+	function __destruct(){
+		$this->the_post = false;	
+	}
+	
 }

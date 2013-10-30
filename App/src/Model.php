@@ -1,12 +1,55 @@
 <?php
 abstract class Model {
 	
-	/**
-	* @var $schema
-	*
-	* Schema object
+	/** 
+	* The full prefixed table name
+	* 
+	* This is set by the constructor
 	*/
-	public $schema;
+	public $table;
+	
+	
+	/** 
+	* Unprefixed table name
+	*
+	* This must be set by user
+	*/
+	public $table_basename;
+	
+	
+	/** $field_names 
+	* 
+	* The table columns
+	* 
+	* Array of 'column' => 'SQL string'
+	* e.g. 'id' => 'bigint(20) unsigned NOT NULL auto_increment'
+	*/
+	public $field_names = array();
+	
+	
+	/** $primary_key
+	*
+	* (required)
+	*
+	* @var string
+	*/
+	public $primary_key;
+	
+	
+	/** $unique_keys 
+	* 
+	* Array of 'key_name' => 'column_name'
+	*/
+	public $unique_keys = array();
+	
+	
+	/** $keys
+	* 
+	* Array of 'key_name' => 'column_name'
+	*/
+	public $keys = array();
+	
+	
 	
 	/**
 	* @var $db
@@ -23,46 +66,74 @@ abstract class Model {
 	public $_object_class;
 	
 	
-	/** DB Action Callbacks */
-	
-	// Callables to run before a row is inserted
-	protected $before_insert = array();
-	
-	// Callables to run before a row is updated
-	protected $before_update = array();
-	
-	// Callables (values) to run before fields (keys) are updated
-	protected $before_update_field = array();
-	
-	// Callables to run after a row is inserted
-	protected $after_insert = array();
-	
-	// Callables to run after a row is updated
-	protected $after_update = array();
-	
-	// Callables (values) to run after fields (keys) are updated
-	protected $after_update_field = array();
-	
-	// Callables to run before a row is deleted
-	protected $before_delete = array();
-	
-	// Callables to run after a row is deleted
-	protected $after_delete = array();
-	
-	
 	/** Constructor	
 	*
 	* Sets up schema and wpdb
 	*
-	* @param object $schema Schema object to use
 	*/
-		function __construct( Schema &$schema ){
+		function __construct(){
 			
 			global $wpdb;
+			
+			// add table basename to $tables array
+			if ( !in_array($this->table_basename, $wpdb->tables) )
+				$wpdb->tables[] = $this->table_basename;
+			
+			// set the table name
+			$this->table = $wpdb->prefix . $this->table_basename;	
+			
+			// add the table name to $wpdb (as property)
+			if ( !isset($wpdb->{$this->table_basename}) )
+				$wpdb->{$this->table_basename} = $this->table;
 			
 			$this->db =& $wpdb;
 			
 			$this->schema =& $schema;
+		}
+	
+	
+	/**
+	* Returns a field's format for SQL 
+	*
+	* integer => %d
+	* float => %f
+	* string => %s (default)
+	*/
+		public function get_field_format($field_name){
+			if ( !isset($this->field_names[$field_name]) )
+				return false;
+			
+			$field = strtolower($this->field_names[$field_name]);
+			
+			if ( strpos($field, 'int') !== false )
+				return '%d';
+			elseif ( strpos($field, 'float') !== false )
+				return '%f';
+			else
+				return '%s';
+		}
+	
+	/** 
+	* Returns field length max
+	*
+	*/
+		public function get_field_length($field_name){
+			if ( !isset($this->field_names[$field_name]) )
+				return false;
+			
+			$field = $this->field_names[$field_name];
+			
+			if ( strpos($field, '(') === false )
+				return null;
+			
+			$_start = strpos($field, '(') + 1;
+			$length = substr($field, $_start, strpos($field, ')') - $_start );
+			// Floats can has two lengths: (3,5) => 123.12345
+			if ( strpos($length, ',') !== false ){
+				$_n = explode(',', $length);
+				$length = array_sum($_n);
+			}
+			return (int) $length;		
 		}
 	
 	
@@ -97,21 +168,21 @@ abstract class Model {
 	*/	
 		public function query_by( $field, $field_where, $select = '*', $extra_where = array() ){
 			
-			if ( !isset($this->schema->field_names[$field]) )
+			if ( !isset($this->field_names[$field]) )
 				throw new InvalidArgumentException('field must be a valid table column');
 			
 			$sql_args = array(
 				$field_where,
 			);
 			
-			if ( is_string($select) )
-				$select_string = $select;
-			elseif ( is_array($select) )
-				$select_string = implode(', ', $select);
+			if ( !is_string($select) ) {
+				if ( is_array($select) )
+					$select = implode(', ', $select);
+			}
 			
-			$field_type = $this->schema->get_field_format($field);
+			$field_type = $this->get_field_format($field);
 			
-			$sql = "SELECT $select_string FROM `{$this->schema->table}` WHERE `{$field}` = $field_type";
+			$sql = "SELECT $select FROM `{$this->table}` WHERE `{$field}` = $field_type";
 			
 			if ( !empty($extra_where) ){
 				
@@ -120,7 +191,7 @@ abstract class Model {
 				$wheres = $where_vals = array();
 				
 				foreach($extra_where as $col => $val){
-					$_format = $this->schema->get_field_format($col);
+					$_format = $this->get_field_format($col);
 					$wheres[] = "`$col` = {$_format}";
 					$where_vals[] = $val;
 				}
@@ -148,41 +219,137 @@ abstract class Model {
 			
 			foreach($where as $field => $arg ){
 				
-				if ( !isset($this->schema->field_names[$field]) )
+				if ( !isset($this->field_names[$field]) )
 					throw new InvalidArgumentException('field must be a valid table column');
 				
-				$format = $this->schema->get_field_format($field);
+				$format = $this->get_field_format($field);
 				
 				$sql_wheres[] = "`$field` = {$format}";
 				$sql_args[] = $arg;
 			}
 			
 			if ( is_string($select) )
-				$selectStr = $select;
+				$sel = $select;
 			elseif ( is_array($select) )
-				$selectStr = implode(', ', $select);
+				$sel = implode(', ', $select);
 			
-			$sql = "SELECT $selectStr FROM {$this->schema->table} WHERE " . implode(" AND ", $sql_wheres );
+			$sql = "SELECT $sel FROM {$this->table} WHERE " . implode(" AND ", $sql_wheres );
 			
 			return $this->db->get_row( $this->db->prepare($sql, $sql_args) );
 		}
-	
+
 		
 	/**
 	* 
 	* Sets the $_object_class 
 	*
 	* @param string $class Class name (string) of object
-	* @return void
 	*/
 		public function setObjectClass($class){
-			$this->_object_class = $class;	
+			$this->_object_class = $class;
+			return $this;
 		}
 	
 	
 	/** 
 		---- wpdb methods ---- 
 	*/
+	
+	/**
+	 * Insert a row into a table.
+	 *
+	 * @see wpdb::insert()
+	 */
+		public function insert( $data, $format = null ){
+			
+			$this->before_insert( $data, $format );
+			
+			$success = $this->db->insert( $this->table, $data, $format );
+			
+			$this->after_insert($success);
+			
+			return $success;
+		}
+			
+			protected function before_insert( &$data, &$format ){}
+			protected function after_insert( &$success ){}
+	
+	
+	/**
+	 * Replace a row into a table.
+	 *
+	 * @see wpdb::replace()
+	 */
+		public function replace( $data, $format = null ) {
+			
+			$this->before_replace($data, $format);
+			
+			$success = $this->db->replace( $this->table, $data, $format, 'REPLACE' );
+			
+			$this->after_replace($success);
+			
+			return $success;
+		}
+	
+			protected function before_replace( &$data, &$format ){}
+			protected function after_replace( &$success ){}
+	
+	
+	/**
+	 * Update a row in the table
+	 *
+	 * @see wpdb::update()
+	 */	
+		public function update( $data, $where, $format = null, $where_format = null ){
+			
+			$this->before_update( $data, $where, $format, $where_format );
+			
+			$success = $this->db->update( $this->table, $data, $where, $format, $where_format );
+			
+			$this->after_update($success);
+			
+			return $success;
+		}
+			
+			protected function before_update( &$data, &$where, &$format, &$where_format ){}
+			protected function after_update( &$success ){}
+				
+	
+	/**
+	 * Delete a row in the table
+	 *
+	 * @see wpdb::delete()
+	 */
+		public function delete( $where, $where_format = null ) {
+			
+			$this->before_delete($where, $where_format);
+			
+			$success = $this->db->delete( $this->table, $where, $where_format );
+			
+			$this->after_delete($success);
+			
+			return $success;
+		}
+			
+			protected function before_delete( &$where, &$where_format ){}
+			protected function after_delete( &$success ){}
+	
+	
+	/**
+	 * Retrieve one row from the database.
+	 *
+	 * Executes a SQL query and returns the row from the SQL result via forgeObject()
+	 *
+	 * @see wpdb::get_row()
+	 */
+		public function get_row( $query = null, $output = OBJECT, $y = 0 ) {
+			$result = $this->db->get_row( $query, $output, $y );
+			if ( !empty($result) ){
+				return $this->forgeObject($result);	
+			}
+			return $result;
+		}
+	
 	
 	/**
 	 * Perform a MySQL database query, using current database connection.
@@ -193,99 +360,6 @@ abstract class Model {
 			return $this->db->query( $sql );
 		}
 	
-	function doAction( $type, $data = array() ){
-		
-		if ( strpos($type, 'before_') !== false && !empty($this->$type) ){
-			foreach($this->$type as $idx => $func){
-				if ( strpos($func, 'this.') !== false ){
-					$func = array($this, str_replace('this.', '', $func));	
-				}
-				if ( strpos($type, '_field') !== false ){
-					if ( is_callable($func) && isset($data[$idx]) ){
-						call_user_func_array($func, &$data);
-					}
-				}
-				else {
-					if ( is_callable($func) )
-						call_user_func_array($func, &$data);
-				}
-			}	
-		}
-		
-		elseif ( strpos($type, 'after_') !== false && !empty($this->$type) ){
-			foreach($this->$type as $func){
-				if ( strpos($func, 'this.') !== false ){
-					$func = array($this, str_replace('this.', '', $func));	
-				}
-				if ( is_callable($func) ){
-					call_user_func($func, &$data);
-				}
-			}	
-		}	
-		
-	}
-	
-	/**
-	 * Insert a row into a table.
-	 *
-	 * @see wpdb::insert()
-	 */
-		public function insert( $data, $format = null ){
-			
-			$this->doAction( 'before_insert', array( 'data' => &$data ) );
-			
-			$success = $this->db->insert( $this->schema->table, $data, $format );
-			
-			$this->doAction( 'after_insert', $success );
-			
-			return $success;
-		}
-	
-	/**
-	 * Replace a row into a table.
-	 *
-	 * @see wpdb::replace()
-	 */
-		public function replace( $data, $format = null ) {
-			return $this->db->replace( $this->schema->table, $data, $format, 'REPLACE' );
-		}
-	
-	/**
-	 * Update a row in the table
-	 *
-	 * @see wpdb::update()
-	 */	
-		public function update( $data, $where, $format = null, $where_format = null ){
-			
-			$this->doAction('before_update', array('data' => &$data, 'where' => &$where, 'format' => &$format, 'where_format' => &$where_format));
-			
-			$this->doAction('before_update_field', array('data' => &$data, 'where' => &$where, 'format' => &$format, 'where_format' => &$where_format));
-			
-			$success = $this->db->update( $this->schema->table, $data, $where, $format, $where_format );
-			
-			$this->doAction('after_update', &$success);
-			
-			$this->doAction('after_field_update', &$success);
-			
-			return $success;
-		}
-	
-	/**
-	 * Delete a row in the table
-	 *
-	 * @see wpdb::delete()
-	 */
-		public function delete( $where, $where_format = null ) {
-			
-			$this->doAction( 'before_delete', array( 'where' => &$where, 'where_format' => &$where_format ) );
-			
-			$success = $this->db->delete( $this->schema->table, $where, $where_format );
-			
-			$this->doAction( 'after_delete', &$success);
-			
-			return $success;
-		}
-	
 	/**
 	 * Retrieve one variable from the database.
 	 *
@@ -293,21 +367,6 @@ abstract class Model {
 	 */
 		public function get_var( $query = null, $x = 0, $y = 0 ) {
 			return $this->db->get_var( $query, $x, $y );
-		}
-	
-	/**
-	 * Retrieve one row from the database.
-	 *
-	 * Executes a SQL query and returns the row from the SQL result.
-	 *
-	 * @see wpdb::get_row()
-	 */
-		public function get_row( $query = null, $output = OBJECT, $y = 0 ) {
-			$result = $this->db->get_row( $query, $output, $y );
-			if ( !empty($result) ){
-				return $this->forgeObject($result);	
-			}
-			return $result;
 		}
 	
 	/**

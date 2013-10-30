@@ -1,15 +1,5 @@
 <?php
 
-
-function app_get_schema( $name ){
-	return SchemaRegistry::instance()->get($name);	
-}
-
-function app_get_model( $name ){
-	return ModelRegistry::instance()->get($name);	
-}
-
-
 // Meta
 
 function get_meta_model( $type ){

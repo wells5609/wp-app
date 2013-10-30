@@ -7,19 +7,21 @@ AppApi::instance()
 
 
 // Register some managers
-// Managers for postx and meta are preloaded when added above
-ManagerRegistry::instance()
-	->register('reserve',	null);		# corresponds to ReserveManager
-//	->register('companyReserves');		# corresponds to CompanyReservesManager
+//Registry::instance()
+//	->register('Manager', 'postx')		# corresponds to PostxManager
+//	->register('Manager', 'meta')
+//	->register('Manager', 'reserve');		
+	
+//	->register('Manager', 'companyReserves');
 
 
 PostxManager::instance()
-	->register_type('company');		# corresponds to post extension for post-type 'company'
+	->register_type('company');		# post extension for post-type 'company'
 	
 
 MetaManager::instance()
-	->register_type('company');		# corresponds to meta for post-type 'company'
+	->register_type('company');		# meta for post-type 'company'
 
 
 ReserveManager::instance()
-	->register_type('reserve');		# corresponds to post extension for post-type 'reserve'
+	->register_type('reserve');		# post extension for post-type 'reserve'

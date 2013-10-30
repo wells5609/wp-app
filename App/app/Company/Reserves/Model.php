@@ -1,6 +1,6 @@
 <?php
 
-class Company_Reserves_Schema extends Schema {
+class Company_Reserves_Model extends Model {
 	
 	public $table_basename = 'company_reserves';
 	

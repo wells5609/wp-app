@@ -1,6 +1,6 @@
 <?php
 	
-class MetaManager implements ManagerInterface {
+class MetaManager extends Manager {
 	
 	static private $_instance;
 	
@@ -14,37 +14,11 @@ class MetaManager implements ManagerInterface {
 		return self::$_instance;
 	}
 	
-		
-	public function register_type( $type ){
-		$this->types[ $type ] = $type;
-		return $this;
-	}
 	
-	public function deregister_type( $type ){
-		unset($this->types[$type]);
-		return $this;	
-	}
-	
-	public function get_types(){
-		return $this->types;
-	}
-			
+	// Overwriting method to use different string
 	public function get_model( $type ){
-		return ModelRegistry::get( $type . '_Meta_Model' );	
-	}
-		
-	public function get_schema( $type ){
-		return $this->get_model($type)->schema;	
+		return Registry::get_one( '_Meta_Model', $type );	
 	}
 	
-	public function get_schemas(){
-		$_this = self::instance();
-		$schemas = array();
-		foreach($_this->types as $type){
-			$model =& $_this->get_model($type);
-			$schemas[ $model->schema->table_basename ] =& $model->schema;	
-		}
-		return $schemas;
-	}
 	
 }

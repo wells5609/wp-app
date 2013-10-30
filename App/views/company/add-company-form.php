@@ -7,7 +7,7 @@ else :
 
 if ( isset($_POST['submitted']) ){
 	
-	$handler = new AddCompanyHandler($_POST);
+	$handler = new AddCompanyHandler( $_POST, "POST" );
 	
 	if ( $handler->is_error() ){
 		$errors = $handler->get_errors();

@@ -348,20 +348,7 @@ class AppApi {
 		
 		$feature = strtolower($feature);
 		
-		switch($feature){
-			
-			case 'postx':
-				ManagerRegistry::instance()->register('postx');
-				break;
-			
-			case 'meta':
-				ManagerRegistry::instance()->register('meta');
-				break;
-				
-			default:
-				do_action('app/load_feature', $feature);
-				break;	
-		}
+		do_action('app/load_feature', $feature);
 						
 	}
 	
@@ -419,7 +406,9 @@ class AppApi {
 				return;	
 		}
 		
-		$this->autoload_translate($class);
+		if ( $pos = strpos($class, 'Manager') ){
+			$class = substr($class, 0, $pos) . '/' . $class;
+		}
 		
 		//	Look in src, app, lib
 		if ( $this->load_file('src', $class) )
@@ -429,21 +418,6 @@ class AppApi {
 		if ( $this->load_file('lib', $class) )
 			return;		
 	
-	}
-	
-	private function autoload_translate(&$class){
-		
-		if ( strpos($class, 'Registry') != 0 ){
-			$class = 'registries/' . $class;	
-		}
-		elseif ( strpos($class, 'Interface') != 0 ){
-			$class = 'interfaces/' . $class;	
-		}
-		elseif ( $pos = strpos($class, 'Manager') ){
-			$type = substr($class, 0, $pos);
-			$class = $type . '/' . $class;
-		}
-		
 	}
 	
 	

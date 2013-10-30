@@ -32,39 +32,47 @@ class YqlDataFetcher {
 	
 	public function query( $name, $arg ){
 		
-		if ( isset(self::$queries[$name]) ){
-			
-			$q = self::$queries[$name];
-			
-			if (isset( $q['url'] ) )
-				$url = YqlStore::get_url( $q['url'] ) . $arg;
-			
-			if ( isset( $q['table'] ) )
-				$table = YqlStore::get_table_url( $q['table'] );
-			
-			$query = $q['query'];
-			
-			if ( isset($url) )
-				$query = str_replace('__URL__', $url, $query);
-			
-			if ( isset($table) )
-				$query = str_replace('__TABLE__', $table, $query);	
-			
-			$query = str_replace('__VAR__', $arg, $query);
-			
-			$results = yql_request( $query );
-			
-			if ( yql_has_results($results) ){
-				
-				if ( isset( $q['data'] ) && isset($results[ $q['data'] ]) )
-					$results = $results[ $q['data'] ];
-				
-				return apply_filters( "yql/query/{$name}", $results, $arg );
-			}
-			
-			return NULL;
-		}	
+		if ( !isset(self::$queries[$name]) ){
+			throw new Exception('Invalid YQL query name: ' . $name );
+		}
 		
+		$q = self::$queries[$name];
+		
+		$query = $q['query'];
+		
+		if (isset( $q['url'] ) ){
+			$url = YqlStore::get_url( $q['url'] ) . $arg;
+			$query = str_replace('__URL__', $url, $query);
+		}
+		
+		if ( isset( $q['table'] ) ){
+			$table = YqlStore::get_table_url( $q['table'] );
+			$query = str_replace('__TABLE__', $table, $query);
+		}
+		
+		$query = str_replace('__VAR__', $arg, $query);
+		
+		$results = yql_request( $query );
+		
+		if ( yql_has_results($results) ){
+			
+			if ( isset( $q['data'] ) ){
+				$r = array();
+				
+				if ( is_array($q['data']) ){
+					foreach($q['data'] as $data){
+						$r[ $data ] = !isset($results[ $data ]) ? null : $results[ $data ];	
+					}
+				}
+				elseif ( isset($results[ $q['data'] ]) )
+					$r = $results[ $q['data'] ];
+			}
+			else $r = $results;
+			
+			return apply_filters( "yql/query/{$name}", $r, $arg );
+		}
+		
+		return NULL;
 	}
 	
 }
@@ -76,14 +84,14 @@ add_filter('yql/query/cdp', '_yql_parse_cdp', 10, 2);
 	
 	function _yql_parse_cdp( $results, $ticker ){
 		
-		$results['href'] = urldecode( str_replace('//www.google.com/url?source=finance&q=', '', $results['href']) );
+		$results['href']	= urldecode( str_replace('//www.google.com/url?source=finance&q=', '', $results['href']) );
 		$results['content'] = str_replace('/100', '', $results['content']);
 		
 		$return = array();
 		
-		$return['href'] = $results['href'];
-		$return['score'] = $results['content'];
-		$return['company_id'] = str_between($results['href'], 'company=', '&ei');
+		$return['href']			= trim($results['href']);
+		$return['score']		= trim($results['content']);
+		$return['company_id']	= trim( str_between($results['href'], 'company=', '&ei') );
 		
 		return $return;
 	}

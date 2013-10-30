@@ -1,10 +1,8 @@
 <?php
 
-class PostxManager implements ManagerInterface {
+class PostxManager extends Manager {
 
 	static private $_instance;
-	
-	public $types = array();
 	
 	static public $postxs = array();
 	
@@ -21,49 +19,9 @@ class PostxManager implements ManagerInterface {
 	}
 	
 	private function __construct(){
-		add_action('the_post', array($this, 'extend'), 1, 1);
+		add_action('the_post', array($this, 'extend_the_post'), 1, 1);
 	}
 	
-	public function register_type( $type ){
-		$this->types[$type] = $type;
-		return $this;
-	}
-	
-	public function deregister_type($type){
-		unset($this->types[$type]);
-		return $this;	
-	}
-	
-	public function get_types(){
-		return $this->types;
-	}
-		
-	public function get_model( $type ){
-		return ModelRegistry::get( $type );	
-	}
-	
-	function get_models(){
-		$models = array();
-		foreach($this->get_types() as $type)
-			$models[$type] = $this->get_model($type);
-		return $models;	
-	}
-		
-	public function get_schema( $type ){
-		return $this->get_model($type)->schema;	
-	}
-	
-	public function get_schemas(){
-		
-		$schemas = array();
-		
-		foreach($this->get_models() as $model){
-			$schemas[ $model->schema->table_basename ] =& $model->schema;
-		}
-		return $schemas;
-	}
-
-
 	public function get_postx( $post = null ){
 		
 		if ( null !== $post ){
@@ -74,19 +32,26 @@ class PostxManager implements ManagerInterface {
 			else
 				return false;
 			
-			return $this->extend($_post, false);
+			return $this->extend($_post);
 		}
 		
-		if ( !did_action('the_post') ){
+		if ( !isset($this->_postx) && !did_action('the_post') ){
 			return 'get_postx() called too early. call after the_post action.';	
 		}
 		
 		return $this->_postx;
 	}
 	
-	public function extend( &$post_object, $is_the_post = true ){
+	
+	// Do not call directly - callback for 'the_post' action
+	public function extend_the_post( &$post_object ){
 		
-		if ( isset($this->types[ $post_object->post_type ]) ){
+		return $this->extend($post_object, true);
+	}
+	
+	protected function extend( &$post_object, $is_the_post = false ){
+		
+		if ( $this->is_registered_type( $post_object->post_type ) ){
 		
 			$this->_postx_model =& $this->get_model( $post_object->post_type );				
 			
@@ -98,7 +63,7 @@ class PostxManager implements ManagerInterface {
 					self::$postxs[$_key] =& $cached;
 				
 				else {
-					self::$postxs[$_key] =& $this->_postx_model->extend_post( $post_object->ID );
+					self::$postxs[$_key] =& $this->_postx_model->extend_post( $post_object );
 					wp_cache_add( $_key, self::$postxs[$_key], 'postxs' );
 				}
 			}

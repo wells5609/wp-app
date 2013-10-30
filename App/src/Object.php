@@ -1,15 +1,65 @@
 <?php
-
 abstract class Object {
 	
-	function __construct( &$db_object ){
+	
+	public function __construct( &$db_object ){
 		
-		foreach((array)$db_object as $key => $val){
+		$this->import($db_object);
+	}
+	
+	
+	final function import( &$vars ){
+		
+		foreach((array) $vars as $key => $val){
 			$this->$key = $val;	
 		}
 		
+		$this->onImport();
 	}
 	
+	
+	protected function onImport(){}
+	
+	
+	
+	/**
+	* Magically handle getters and setters.
+	*
+	* @param string $function
+	* @param array $arguments
+	* @return mixed
+	*/
+		public function __call($function, $arguments){
+			
+			// Getters following the pattern 'get_{$property}'
+			if ( 0 === strpos($function, 'get_') ) {
+				
+				$property = substr($function, 4);
+				
+				if ( isset($this->$property) )
+					return $this->{$property};
+			}
+			
+			// Setters following the pattern 'set_{$property}'
+			elseif ( 0 === strpos($function, 'set_') ) {
+				
+				$property = substr($function, 4);
+				
+				$this->{$property} = $arguments[0];
+			}
+			
+			// Echoers following the pattern 'the_{$property}'
+			elseif ( 0 === strpos($function, 'the_') ) {
+				
+				$property = substr($function, 4);
+				
+				if ( isset($this->$property) )
+					echo $this->{$property};
+			}
+			
+		}
+		
+			
 	function __get( $var ){
 		return isset($this->$var) ? $this->$var : NULL;	
 	}
