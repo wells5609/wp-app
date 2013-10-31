@@ -53,8 +53,8 @@ class My_Model extends Model {
 
 The `Model` class has two methods to get column data:
 
-* *`get_column_format($name)`* - returns the sprintf-like format string used in `$wpdb->prepare()` calls: `%d` (int), `%f` (float), or `%s` (string) [default].
-* *`get_column_length($name)`* - returns the maximum number of characters allowed for a field. e.g. in `My_Model` above, `My_Model::get_column_length('url')` would return `120`.
+* **`get_column_format($name)`** - returns the sprintf-like format string used in `$wpdb->prepare()` calls: `%d` (int), `%f` (float), or `%s` (string) [default].
+* **`get_column_length($name)`** - returns the maximum number of characters allowed for a field. e.g. in `My_Model` above, `My_Model::get_column_length('url')` would return `120`.
 
 
 ###Methods: Database Access
@@ -63,24 +63,24 @@ Models query the database and create Objects from the results. Database access m
 
 Database methods - exactly the same as their WPDB counterparts - include:
 
-* *`query( $sql )`*
-* *`get_var( $query = null, $x = 0, $y = 0 )`*
-* *`get_col( $query = null , $x = 0 )`*
-* *`get_results( $string, $output_type = OBJECT )`*
+* **`query( $sql )`**
+* **`get_var( $query = null, $x = 0, $y = 0 )`**
+* **`get_col( $query = null , $x = 0 )`**
+* **`get_results( $string, $output_type = OBJECT )`**
 
 #####Methods with actions
 
 The following methods call an action before and after performing their query:
 
-* *`insert( $data, $format = null )`*
-* *`replace( $data, $format = null )`*
-* *`update( $data, $where, $format = null, $where_format = null )`*
-* *`delete( $where, $where_format = null )`*
+* **`insert( $data, $format = null )`**
+* **`replace( $data, $format = null )`**
+* **`update( $data, $where, $format = null, $where_format = null )`**
+* **`delete( $where, $where_format = null )`**
 
 The above methods use the same syntax as their corresponding `WPDB` methods, ommitting the `table` parameter and call the following actions:
 
-1. `before_*()`
-2. `after_*()`
+1. **`before_*()`**
+2. **`after_*()`**
 
 Function parameters are passed by reference to modify data prior to databasing.
 
@@ -95,11 +95,9 @@ Two custom methods provide a simple way to perform common queries:
 
 There is one special method that returns the model's corresponding `Object`:
 
-* *`get_row( $query = null, $output = OBJECT, $y = 0 )`*
+* **`get_row( $query = null, $output = OBJECT, $y = 0 )`**
 
-The above method calls `$this->forgeObject($db_result)` using the database result object to create the proper Object.
-
-The `forgeObject()` function looks like this:
+`get_row()` calls `$this->forgeObject($db_result)` using the query results to create the proper Object. `forgeObject()` looks like this:
 
 ```php
 
@@ -115,9 +113,17 @@ protected function forgeObject( &$db_object ){
 		
 ```
 
-By default, `$_object_class` is set to `'Object'`, the base Object. Simply change this variable to use a custom Object class.
+By default, `$_object_class` is set to `'Object'` - the base Object. Simply change this variable to use a custom Object class.
 
 
 ##Objects
+
+Objects represent a specific set of data, usually a table row.
+
+###Methods
+
+* **`__construct( &$db_object )`** - The base Object constructor accepts 1 parameter, the database result object, and passes this to its `import()` method.
+* **`import( &$vars )`** - this method imports the passed vars into the Object as properties. It then calls its `onImport()` method, which does nothing by default.
+* **`__call( $func, $args )`** - this magic method handles nonexistant methods, including `get_*()`, `set_*()`, and `the_*()`, which return, set, and echo, respectively, an object property.
 
 
