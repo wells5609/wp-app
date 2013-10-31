@@ -13,7 +13,7 @@ The plugin has a few primary components:
 4. **Registry** - stores Models and Managers.
 
 
-###Models
+##Models
 
 Models define the database table using a SQL-like format:
 
@@ -49,7 +49,7 @@ class My_Model extends Model {
 
 ```
 
-####Column Data
+###Methods: Column Data
 
 The `Model` class has two methods to get column data:
 
@@ -57,7 +57,7 @@ The `Model` class has two methods to get column data:
 * *`get_column_length($name)`* - returns the maximum number of characters allowed for a field. e.g. in `My_Model` above, `My_Model::get_column_length('url')` would return `120`.
 
 
-####Database Access
+###Methods: Database Access
 
 Models query the database and create Objects from the results. Database access methods generally emulate WPDB methods. Several methods also have added functionality.
 
