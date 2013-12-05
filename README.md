@@ -9,13 +9,13 @@ The plugin has a few primary components:
 
 1. **Models** - defines data (e.g. table, columns, keys), manipulates data (e.g. queries database), and creates Objects.
 2. **Objects** - a representation of a table row.
-3. **Managers** - manages Models & Objects of a particular type.
-4. **Registry** - stores Models and Managers.
+3. **Registry** - stores objects.
+4. **App** - initiates app and controls features, etc.
 
 
 ##Models
 
-Models define the database table using a SQL-like format:
+Rach Model represents a database table for a particular 'datatype'. It defines the table using a SQL-like format:
 
 ```php
 
@@ -66,7 +66,10 @@ Database methods - exactly the same as their WPDB counterparts - include:
 * **`query( $sql )`**
 * **`get_var( $query = null, $x = 0, $y = 0 )`**
 * **`get_col( $query = null , $x = 0 )`**
-* **`get_results( $string, $output_type = OBJECT )`**
+* **`get_results( $string, $output_type = OBJECT )`** *
+
+*`get_results()` now calls `forgeObject()`; see below.
+
 
 #####Methods with actions
 
@@ -93,7 +96,7 @@ Two custom methods provide a simple way to perform common queries:
 
 #####The get_row() method
 
-There is one special method that returns the model's corresponding `Object`:
+A special method that returns the model's corresponding `Object`:
 
 * **`get_row( $query = null, $output = OBJECT, $y = 0 )`**
 
