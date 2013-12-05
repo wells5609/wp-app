@@ -5,75 +5,61 @@ if ( ! is_user_logged_in() ) :
 	echo '<div class="alert alert-warning alert-block"><h4>Woah there</h4>You must be <a href="' . esc_url(wp_login_url()) . '" title="Login">logged in</a> to view this page.</div>';	
 else :
 
-if ( isset($_POST['submitted']) ){
-	
-	$handler = new AddCompanyHandler( $_POST, "POST" );
-	
-	if ( $handler->is_error() ){
-		$errors = $handler->get_errors();
-		foreach($errors as $type => $msg){
-			echo '<div class="alert alert-danger alert-block"><h4>Error</h4>' . $msg . '</div>';
-		}
-	}
-		
-	if ( $handler->success ){
-		foreach($handler->msgs as $message){
-			echo '<div class="alert alert-success"><button type="button" class="close" aria-hidden="true">&times;</button>' . $message . '</div>';	
-		}
-	}
-
-}
-else {
-	$handler = new stdClass;
-	$errors = array();
-}
-
 ?>
 
-<form class="form-horizontal<?php if (isset($errors['exists'])) echo ' has-error' ?>" role="form" id="create-new-post" action="<?php the_permalink(); ?>" method="post">
+<div id="messages"></div>
+
+<form class="form-horizontal" role="form" id="create-new-post">
 	
-	<div class="form-group<?php if (isset($errors['ticker'])) echo ' has-error' ?>">
+	<br>
+	
+	<?php
+		$grp1 = new HTML_Element('div');
+		$grp1->addClass('form-group');
+	
+		$ticker = new HTML_Input('text');
+		$ticker->set('name', 'ticker')
+			->addClass('input-lg')
+			->set('label', 'Ticker')
+			->set('label_attributes', 'class="col-sm-4"')
+			->wrap('div', 'class="col-sm-4"');
 		
-		<label class="col-sm-4 control-label" for="ticker">Ticker</label>
+		$grp1->addContent($ticker)
+			->render('e');
 		
-		<div class="col-sm-4">
+		$grp2 = new HTML_Element('div');
+		$grp2->addClass('form-group');
+	
+		$human = new HTML_Input('text');
+		$human->set('name', 'human_check')
+			->addClass('input-lg')
+			->set('label', 'Human Check')
+			->set('label_attributes', 'class="col-sm-4"')
+			->set('help_text', 'Three-letter antonym of "good"')
+			->wrap('div', 'class="col-sm-4"');
 		
-			<input type="text" name="ticker" id="ticker" value="" class="required form-control">
+		$grp2->addContent($human)
+			->render('e');
 			
-			<?php if (isset($errors['ticker'])) { ?>
-				<span class="help-block"><?php echo $handler->get_error_message('ticker'); ?></span>
-			<?php } ?>
-		
-		</div>
-	</div>
-	
-	<div class="form-group<?php if (isset($errors['human'])) echo ' has-error' ?>">
-		
-		<label class="col-sm-4 control-label" for="human_check">Human Check</label>
-		
-		<div class=" col-sm-4">
-		
-			<input type="text" name="human_check" id="human_check" class="required form-control" value="" />
-		
-			<span class="help-inline"><?php _e('A three-letter antonym for "good".', 'bootstrapped'); ?></span>
-		
-			<?php if (isset($errors['human'])) { ?>
-				<span class="help-block"><?php echo $handler->get_error_message('human'); ?></span>
-			<?php } ?>
-		
-		</div>
-	</div>
+	?>
 	
 	<div class="form-actions col-sm-push-4 col-sm-4">
-		<button class="btn btn-large btn-block btn-success" id="submit" type="submit">Add Company &raquo;</button>
+		<?php 
+			echo ajax_html(array(
+				'tag' => 'button',
+				'class' => 'btn btn-lg btn-block btn-primary ajax-request-form-submit',
+				'type' => 'button',
+				'action' => 'add_company',
+				'method' => 'POST',
+				'q' => '',
+				'nonce' => ajax_create_nonce('add-company-nonce'),
+				'content' => 'Add Company &raquo;',
+			));
+		?>
 	</div>
-	
-	<input type="hidden" name="nonce" id="nonce" class="hidden" value="<?php echo wp_create_nonce('add-company-nonce'); ?>" />
-	
-	<input type="hidden" name="submitted" id="submitted" class="hidden" value="true" />
 	
 	<input type="text" name="honey" id="honey" class="hidden" style="display:none;" value="" />
 	
 </form>
 
-<?php endif; // is_user_logged_in(); ?>
+<?php endif; // is_user_logged_in ?>

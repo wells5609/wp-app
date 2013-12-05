@@ -13,8 +13,32 @@ class Meta_Model extends Model {
 	
 	public $_object_class = 'Meta_Object';
 	
-	
-	
+	public function update_meta( $data ){
+		
+		$exists = $this->get_value($data[$this->id_column], $data['meta_key']);
+		$defaults = array(
+			'time_updated'		=> time(),
+			'update_interval'	=> DAY_IN_SECONDS/2,
+		);
+		$args = array_merge($defaults, $data);
+		
+		if ( !$exists ){
+			return $this->insert($args);
+		}
+		else{
+			return $this->update( 
+				array(
+					'meta_value' => (string) $args['meta_value'], 
+					'time_updated' => $args['time_updated'], 
+					'update_interval' => $args['update_interval']
+				), 
+				array(
+					$this->id_column => $args[$this->id_column], 
+					'meta_key' => $args['meta_key']
+				)
+			);
+		}
+	}
 	
 	public function get_value( $object_id, $meta_key = null, $id_column = null){
 		return $this->get_object($object_id, $meta_key, VALUE, $id_column);	
@@ -28,11 +52,16 @@ class Meta_Model extends Model {
 			$id_column = $this->id_column;
 		}
 		
+		$select = '*';
+		
 		if ( null === $meta_key ){
 			$db_object =& $this->query_by( $id_column, $object_id );
 		}
 		else {
-			$db_object =& $this->query_by_multiple( array( $id_column => $object_id, 'meta_key' => $meta_key, ) );
+			if ( VALUE == $output )
+				$select = 'meta_value';
+			
+			$db_object =& $this->query_by_multiple( array( $id_column => $object_id, 'meta_key' => $meta_key, ), $select );
 		}
 		
 		if ( empty($db_object) )

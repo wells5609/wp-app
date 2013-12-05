@@ -4,7 +4,7 @@ class Postx_Object extends Object {
 	
 	public $post;
 	
-	public $the_post = false;
+	public $is_the_post = false;
 	
 	/**
 	* Overwriting Object constructor
@@ -14,8 +14,12 @@ class Postx_Object extends Object {
 		
 		$this->import($db_object);
 		
-		if ( null === $wp_post )
-			$this->importPost($GLOBALS['post']);
+		if ( null === $wp_post ){
+			if ( $this->is_the_post )
+				$this->importPost($GLOBALS['post']);
+			else
+				$this->importPost($this->id); // change this if not using 'id'
+		}
 		else 
 			$this->importPost($wp_post);
 	}
@@ -27,13 +31,17 @@ class Postx_Object extends Object {
 		return isset($this->$var) ? $this->$var : NULL;	
 	}
 	
+	public function append_data($name, &$data){
+		$this->$name = $data;	
+	}
+	
 	// Imports WP_Post into Object
 	protected function importPost(&$post){
 		
 		if ( is_object($post) ) {
 			
 			if ( $post->ID == $this->id )
-				$this->the_post = true;
+				$this->is_the_post = true;
 			
 			$this->post =& $post;
 		}
@@ -44,12 +52,32 @@ class Postx_Object extends Object {
 	
 	}
 	
+	public function get_metadata( $output = OBJECT ){
+		
+		$meta_model = get_meta_model( $this->post->post_type );
+		
+		$results = $meta_model->get_results( "SELECT * FROM {$meta_model->table} WHERE {$meta_model->id_column} = {$this->id}" );	
+		
+		if ( OBJECT === $output )
+			return $results;
+		
+		switch($output){
+			case ARRAY_A:
+				return (array) $results;
+			case ARRAY_N:
+				return array_values( (array) $results );
+			case VALUE:	
+				return wp_list_pluck($results, 'meta_value');
+		}
+	
+	}
+		
+	
+	function __wakeup(){
+	}
 	
 	function __sleep(){
-		$this->the_post = false;	
+		return array_keys( get_object_vars( $this ) );
 	}
-	function __destruct(){
-		$this->the_post = false;	
-	}
-	
+			
 }

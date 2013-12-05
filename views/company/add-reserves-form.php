@@ -1,13 +1,20 @@
 <?php
 
-$company_id = wp_filter_kses( $_GET['company_post_id'] );
+if ( ! is_user_logged_in() ) :
+	echo '<div class="alert alert-warning alert-block"><h4>Woah there</h4>You must be <a href="' . esc_url(wp_login_url()) . '" title="Login">logged in</a> to view this page.</div>';	
+else :
+
+$company_id = wp_filter_kses( $_REQUEST['company_id'] );
 
 ?>
 
-<form class="form-horizontal" role="form" id="add-reserves" action="<?php the_permalink(); ?>" method="post">
+<div id="messages"></div>
+
+<form class="form-horizontal" role="form" id="add-reserves" action="">
 	
-	<div class="form-group">
 	<?php
+		$grp1 = new HTML_Element('div');
+		$grp1->addClass('form-group');
 	
 		$year = new HTML_Input('select');
 		$year->set('name', 'year')
@@ -15,40 +22,45 @@ $company_id = wp_filter_kses( $_GET['company_post_id'] );
 			->setOptions(array('2013'=>'2013', '2012'=>'2012', '2011'=>'2011', '2010'=>'2010'))
 			->wrap('div', 'class="col-sm-4"')
 			->set('label_attributes', 'class="col-sm-3"')
-			->addClass('input-lg')
+			->addClass('input-lg');
+		
+		$grp1->addContent($year)
 			->render('e');
 		
 	?>
-	</div>
 	
 	<br>
 	
-	<div class="form-group">
 	<?php 
-	
+		
+		$grp2 = new HTML_Element('div');
+		$grp2->addClass('form-group');
+		
+		
 		$oil = new HTML_Input('text');
-		$oil->set('name', 'oil.crude')
+		$oil->set('name', 'crude')
 			->set('label', 'Crude Oil')
 			->set('placeholder', 'mmbbl')
 			->set('label_attributes', 'class="col-sm-3"')
 			->addClass('input-lg')
-			->wrap('div', 'class="col-sm-3"')
-			->render('e');
+			->wrap('div', 'class="col-sm-3"');
 		
 		$bitumen = new HTML_Input('text');
-		$bitumen->set('name', 'oilbitumen')
+		$bitumen->set('name', 'bitumen')
 			->set('label', 'Bitumen')
 			->set('placeholder', 'mmbbl')
 			->addClass('input-lg')
 			->set('label_attributes', 'class="col-sm-2"')
-			->wrap('div', 'class="col-sm-3"')
+			->wrap('div', 'class="col-sm-3"');
+		
+		$grp2->addContent($oil)
+			->addContent($bitumen)
 			->render('e');
 		
-	?>
-	</div>
+		
+		$grp3 = new HTML_Element('div');
+		$grp3->addClass('form-group');
 	
-	<div class="form-group">
-	<?php 
 	
 		$gas = new HTML_Input('text');
 		$gas->set('name', 'gas')
@@ -56,58 +68,54 @@ $company_id = wp_filter_kses( $_GET['company_post_id'] );
 			->set('placeholder', 'bcf')
 			->addClass('input-lg')
 			->set('label_attributes', 'class="col-sm-3"')
-			->wrap('div', 'class="col-sm-3"')
-			->render('e');
+			->wrap('div', 'class="col-sm-3"');
 		
 		$syn = new HTML_Input('text');
-		$syn->set('name', 'oil.synthetic')
+		$syn->set('name', 'synthetic')
 			->set('label', 'Synthetic Oil')
 			->set('placeholder', 'mmbbl')
 			->addClass('input-lg')
 			->set('label_attributes', 'class="col-sm-2"')
-			->wrap('div', 'class="col-sm-3"')
-			->render('e');
+			->wrap('div', 'class="col-sm-3"');
 		
-	?>	
-	</div>
-	
-	<div class="form-group">
-	<?php 
-	
+		$grp3->addContent($gas)
+			->addContent($syn)
+			->render('e');
+			
+		
+		$grp4 = new HTML_Element('div');
+		$grp4->addClass('form-group');
+		
+		
 		$ngls = new HTML_Input('text');
 		$ngls->set('name', 'ngl')
 			->set('label', 'Natural Gas Liquids (NGLs)')
 			->set('placeholder', 'mmbbl')
 			->addClass('input-lg')
 			->set('label_attributes', 'class="col-sm-3"')
-			->wrap('div', 'class="col-sm-3"')
-			->render('e');
+			->wrap('div', 'class="col-sm-3"');
 		
+		$coal_label = new HTML_Element('button');
+		$coal_label->setContent('Add Coal')
+			->setAttributes('type="button" class="btn btn-lg btn-default btn-block" data-toggle="collapse" data-target="#coal-panel"')
+			->wrap('div', 'class="col-sm-3 col-sm-push-2"');
+	
 		
+		$grp4->addContent($ngls)
+			->addContent($coal_label)
+			->render('e');	
 	?>	
 	
 	<br>
 	
-	</div>
-	
-	<div class="form-group">
-		<div class="col-sm-3 col-sm-push-3">
-		<div class="checkbox">
-		<label>
-			<input data-toggle="collapse" data-target="#coal-panel" type="checkbox"> <b>Includes Coal</b>
-		</label>
-		</div>
-		</div>
-	</div>
-	
-	<div class="collapse row" id="coal-panel">
-		
+	<div class="row collapse" id="coal-panel">
+		<div class="well well-lg">
 		<div class="form-group">
 		<?php 
 		
 			$bituminous = new HTML_Input('text');
-			$bituminous->set('name', 'bituminous')
-				->set('label', 'Bituminous Coal')
+			$bituminous->set('name', 'coal_bituminous')
+				->set('label', 'Bituminous')
 				->set('placeholder', 'Mt (megatons)')
 				->wrap('div', 'class="col-sm-3"')
 				->addClass('input-lg')
@@ -115,8 +123,8 @@ $company_id = wp_filter_kses( $_GET['company_post_id'] );
 				->render('e');
 			
 			$subbituminous = new HTML_Input('text');
-			$subbituminous->set('name', 'subbituminous')
-				->set('label', 'Sub-bituminous Coal')
+			$subbituminous->set('name', 'coal_subbituminous')
+				->set('label', 'Sub-Bituminous')
 				->set('placeholder', 'Mt (megatons)')
 				->set('label_attributes', 'class="col-sm-2"')
 				->wrap('div', 'class="col-sm-3"')
@@ -129,8 +137,8 @@ $company_id = wp_filter_kses( $_GET['company_post_id'] );
 		<?php 
 		
 			$anthracite = new HTML_Input('text');
-			$anthracite->set('name', 'anthracite')
-				->set('label', 'Anthracite Coal')
+			$anthracite->set('name', 'coal_anthracite')
+				->set('label', 'Anthracite')
 				->set('placeholder', 'Mt (megatons)')
 				->set('label_attributes', 'class="col-sm-3"')
 				->wrap('div', 'class="col-sm-3"')
@@ -138,8 +146,8 @@ $company_id = wp_filter_kses( $_GET['company_post_id'] );
 				->render('e');
 			
 			$lignite = new HTML_Input('text');
-			$lignite->set('name', 'lignite')
-				->set('label', 'Lignite Coal')
+			$lignite->set('name', 'coal_lignite')
+				->set('label', 'Lignite')
 				->set('placeholder', 'Mt (megatons)')
 				->set('label_attributes', 'class="col-sm-2"')
 				->wrap('div', 'class="col-sm-3"')
@@ -148,42 +156,40 @@ $company_id = wp_filter_kses( $_GET['company_post_id'] );
 			
 		?>
 		</div>
-		
+		</div>
 	</div>
 	
 	<hr>
 	
-	<div class="form-group<?php if (isset($errors['human'])) echo ' has-error' ?>">
-		
-		<label class="col-sm-4 control-label" for="human_check">Human Check</label>
-		
-		<div class=" col-sm-4">
-		
-			<input type="text" name="human_check" id="human_check" class="required form-control input-lg" value="" />
-		
-			<span class="help-inline"><?php _e('A three-letter antonym for "good".', 'bootstrapped'); ?></span>
-		
-			<?php if (isset($errors['human'])) { ?>
-				<span class="help-block"><?php echo $handler->get_error_message('human'); ?></span>
-			<?php } ?>
-		
-		</div>
-	</div>
-	
-	<div class="form-actions col-sm-push-4 col-sm-4">
-		<button class="btn btn-lg btn-block btn-primary" id="submit" type="submit">Add Reserve &raquo;</button>
-	</div>
-	
 	<?php
-		$company = new HTML_Input('hidden');
-		$company->set('value', $company_id)
+		
+		$grp7 = new HTML_Element('div');
+		$grp7->addClass('form-group');
+	
+		$human = new HTML_Input('text');
+		$human->set('name', 'human_check')
+			->addClass('input-lg')
+			->set('label', 'Human Check')
+			->set('label_attributes', 'class="col-sm-4"')
+			->set('help_text', 'Three-letter antonym of "good"')
+			->wrap('div', 'class="col-sm-4"');
+		
+		$grp7->addContent($human)
 			->render('e');
+			
 	?>
 	
-	<input type="hidden" name="nonce" id="nonce" class="hidden" value="<?php echo wp_create_nonce('add-company-nonce'); ?>" />
+	<div class="form-actions col-sm-push-4 col-sm-4">
+		<button class="btn btn-lg btn-block btn-primary ajax-request-form-submit" type="button" data-action="add_company_reserves" 
+		data-method="POST" data-q="" data-nonce="<?php echo wp_create_nonce('add-reserves-nonce'); ?>">Add Reserve &raquo;</button>
+	</div>
 	
-	<input type="hidden" name="submitted" id="submitted" class="hidden" value="true" />
+	<input type="hidden" name="company_id" id="company_id" class="hidden" value="<?php echo $company_id ?>" />
 	
 	<input type="text" name="honey" id="honey" class="hidden" style="display:none;" value="" />
 	
 </form>
+
+<?php 
+
+endif; // is_user_logged_in()

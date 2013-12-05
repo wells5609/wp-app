@@ -5,7 +5,7 @@ class AddCompanyHandler extends FormHandler {
 	protected $validations = array(
 		'validate_honey',
 		'validate_human',
-		'validate_nonce',
+		'validate_secure_nonce',
 		'validate_ticker',
 		'check_if_company_exists',
 	);
@@ -27,7 +27,7 @@ class AddCompanyHandler extends FormHandler {
 	);
 	
 	protected $HUMAN_CHECK = 'bad';
-	protected $NONCE_NAME = 'add-company-nonce';
+	//protected $NONCE_NAME = 'add-company-nonce';
 	
 	// Extra vars
 	protected $ticker;
@@ -42,8 +42,15 @@ class AddCompanyHandler extends FormHandler {
 	/** Setup */
 	function init(){
 		@set_time_limit(120);
-		$this->ticker = wp_filter_kses(strtoupper($this->POST['ticker']));
-		$this->model = Registry::get('company');
+		
+		$this->_ticker	= wp_filter_kses(strtoupper($this->POST['ticker']));
+		
+		$this->model	= get_model('company');
+		
+		$this->ticker_yahoo		= format_ticker($this->_ticker, 'yahoo');
+		$this->ticker_google	= format_ticker($this->_ticker, 'google');
+		$this->ticker_msn		= format_ticker($this->_ticker, 'msn');
+		$this->ticker_sec		= format_ticker($this->_ticker, 'sec');
 	}
 	
 	/** Validations */
@@ -52,8 +59,13 @@ class AddCompanyHandler extends FormHandler {
 			$this->errors['ticker'] = 'You must enter a ticker.';
 		}	
 	}
+	function validate_secure_nonce(){
+		if ( !ajax_verify_nonce($this->POST['nonce'], 'add-company-nonce') ){
+			$this->errors['nonce'] = 'Invalid request.';
+		}	
+	}
 	function check_if_company_exists(){
-		if ( $this->model->query_by('ticker', $this->ticker) ){
+		if ( $this->model->query_by('ticker', $this->ticker_msn) ){
 			$this->errors['exists'] = 'A company with that ticker exists.';
 		}
 	}
@@ -66,7 +78,8 @@ class AddCompanyHandler extends FormHandler {
 		$this->wp_post['post_type']		= 'company';
 		$this->wp_post['post_status']	= 'publish';
 		$this->wp_post['post_author']	= get_current_user_ID();
-		$this->wp_post['post_name']		= $this->ticker;
+		$this->wp_post['post_name']		= $this->ticker_yahoo;
+		$this->wp_post['post_excerpt']	= str_limit_sentences($this->postx['description'], 2);	
 			
 	}
 	
@@ -77,12 +90,12 @@ class AddCompanyHandler extends FormHandler {
 		
 		$insert['id'] = $this->post_id;
 		$field_formats[] = '%d';
-		$insert['ticker'] = $this->ticker;
+		$insert['ticker'] = $this->ticker_msn;
 		$field_formats[] = '%s';
 		
 		foreach($this->postx as $field => $value){
 			$insert[$field] = $value;
-			$field_formats[] = $this->model->get_field_format($field);
+			$field_formats[] = $this->model->get_column_format($field);
 		}
 		
 		$this->model->insert( $insert, $field_formats );
@@ -97,7 +110,7 @@ class AddCompanyHandler extends FormHandler {
 			$meta_model->insert( 
 				array(
 					'post_id' => $this->post_id,
-					'ticker' => $this->ticker,
+					'ticker' => $this->ticker_msn,
 					'meta_key' => $meta_key,
 					'meta_value' => $meta_value,
 				),
@@ -111,49 +124,51 @@ class AddCompanyHandler extends FormHandler {
 	
 	function do_sector_industry_employees(){
 		
-		$data = YqlDataFetcher::query('sector_industry_employees', $this->ticker);
+		$data = Yql::query('sector_industry_employees', $this->ticker_yahoo);
+		
 		if ( !$data ) // try again
-			$data = YqlDataFetcher::query('sector_industry_employees', $this->ticker);
+			$data = Yql::query('sector_industry_employees', $this->ticker_yahoo);
+		
 		if ( $data ) {
-			$_sector	= trim($data['Sector']);
-			$_industry	= trim($data['Industry']);
-			$_fte		= trim($data['FullTimeEmployees']);
+			$_sector	= trim($data->Sector);
+			$_industry	= trim($data->Industry);
+			$_fte		= trim($data->FullTimeEmployees);
 			
-			$sector = $this->create_term_if_not_exists($_sector, 'industry', array('parent' => 0));
-			$industry = $this->create_term_if_not_exists($_industry, 'industry', array('parent' => $sector['term_id']));
+			if ( 'N/A' != $_sector )
+				$sector = $this->create_term_if_not_exists($_sector, 'industry', array('parent' => 0));
+			if ( 'N/A' != $_industry )
+				$industry = $this->create_term_if_not_exists($_industry, 'industry', array('parent' => $sector['term_id']));
 			
 			$this->postx['full_time_employees']		= (int) $_fte;
-			
 			$this->postx['sector']					= $_sector;
 			$this->postx['industry']				= $_industry;
-			
-			$this->post_terms['industry']			= array($sector['term_id'], $industry['term_id']);
+			if ( isset($sector) )
+				$this->post_terms['industry']		= array($sector['term_id'], $industry['term_id']);
 		}
 	}
 	
 	function do_sec(){
 		
-		$sec = YqlDataFetcher::query('sec', $this->ticker);
+		$sec = Yql::query('companyInfo', $this->ticker_sec);
 		if ( !$sec ) // try again
-			$sec = YqlDataFetcher::query('sec', $this->ticker);
+			$sec = Yql::query('companyInfo', $this->ticker_sec);
 		if ( $sec ) {
-			$_sic		= trim( $sec['SIC'] );
-			$_sic_desc	= ucwords( strtolower( $sec['SICDescription'] ) );
+			$_sic		= trim( $sec->SIC );
+			$_sic_desc	= ucwords( strtolower( $sec->SICDescription ) );
 			
 			$sic = $this->create_term_if_not_exists($_sic, 'sic', array('description' => $_sic_desc));
 			
 			$this->postx['sic']						= $_sic;
 			$this->post_terms['sic']				= strval($_sic);
-			
-			$this->postx['cik'] 					= $sec['CIK'];	
-			$this->postx['country']					= CountriesStates::iso_from_sec_code($sec['Location']);
-			$this->postx['state']					= $sec['Location'];
-			$this->postx['state_inc']				= isset($sec['stateOfIncorporation']) ? $sec['stateOfIncorporation'] : $sec['Location'];
+			$this->postx['cik'] 					= $sec->CIK;	
+			$this->postx['country']					= CountriesStates::iso_from_sec_code($sec->Location);
+			$this->postx['state']					= $sec->Location;
+			$this->postx['state_inc']				= isset($sec->stateOfIncorporation) ? $sec->stateOfIncorporation : $sec->Location;
 			
 			// Addresses
 			
 			// 1. business
-			$busn = $sec['businessAddress'];
+			$busn = (array) $sec->businessAddress;
 			
 			if ( $busn ){
 				$business_address = array(
@@ -165,11 +180,11 @@ class AddCompanyHandler extends FormHandler {
 				if ( isset($busn['street2']) && $busn['street2'] != $busn['street'] )
 					$business_address['street2'] = $busn['street2'];
 				
-				$this->company_meta['phone']		= $busn['phoneNumber'];
+				$this->company_meta['phone']		= trim($busn['phoneNumber']);
 			}
 			
 			// 2. mailing
-			$mail = $sec['mailingAddress'];
+			$mail = (array) $sec->mailingAddress;
 			
 			if ( $mail ){
 				$mailing_address = array(
@@ -193,9 +208,9 @@ class AddCompanyHandler extends FormHandler {
 	}
 	
 	function do_exchange(){
-		$exchange = YqlDataFetcher::query('exchange', $this->ticker);
+		$exchange = Yql::query('exchange', $this->ticker_yahoo);
 		if ( !$exchange ) // try again
-			$exchange = YqlDataFetcher::query('exchange', $this->ticker);
+			$exchange = Yql::query('exchange', $this->ticker_yahoo);
 		if ( $exchange ){
 			if ( 'NYSE' == $exchange ) $desc = 'New York Stock Exchange';
 			else $desc = '';
@@ -208,20 +223,20 @@ class AddCompanyHandler extends FormHandler {
 	}
 	
 	function do_cdp(){
-		$cdp = YqlDataFetcher::query('cdp', $this->ticker);
+		$cdp = Yql::query('cdp', $this->ticker_google);
 		if ( !$cdp ) // try again
-			$cdp = YqlDataFetcher::query('cdp', $this->ticker);
+			$cdp = Yql::query('cdp', $this->ticker_google);
 		if ( $cdp ){
 			
-			$this->postx['cdp_score']				= $cdp['score'];
-			$this->company_meta['cdp_company_id']	= $cdp['company_id'];
+			$this->postx['cdp_score']				= $cdp->score;
+			$this->company_meta['cdp_company_id']	= $cdp->company_id;
 		}
 	}
 	
 	function do_name(){
-		$name = YqlDataFetcher::query('company_name', $this->ticker);
+		$name = Yql::query('company_name', $this->ticker_msn);
 		if ( !$name ) // try again
-			$name = YqlDataFetcher::query('company_name', $this->ticker);
+			$name = Yql::query('company_name', $this->ticker_msn);
 		if ( $name ){
 			
 			$this->wp_post['post_title']			= wp_filter_post_kses($name);
@@ -229,14 +244,43 @@ class AddCompanyHandler extends FormHandler {
 	}
 	
 	function do_description(){
-		$desc = YqlDataFetcher::query('description', $this->ticker);
+		$desc = Yql::query('description', $this->ticker_yahoo);
 		if ( !$desc ) // try again
-			$desc = YqlDataFetcher::query('description', $this->ticker);
+			$desc = Yql::query('description', $this->ticker_yahoo);
 		if ( $desc ){
 			
-			$this->postx['description']				= trim(wp_filter_nohtml_kses($desc));		
+			$this->postx['description']				= $this->sanitize_description(wp_filter_nohtml_kses($desc));	
 		}
+		else
+			$this->postx['description']	= '';
 	}
+	
+	
+	function sanitize_description($from){
+		
+		$words = array(
+			'L.P.' => 'LP',
+			'L.L.C.' => 'LLC',
+			'Corp.' => 'Corp',
+			'Co.' => 'Co',
+			'p.l.c.' => 'plc',
+			'P.L.C.' => 'plc',
+			'Inc.' => 'Inc',
+			'Cos.' => 'Cos',
+			'Ltd.' => 'Ltd',
+		);
+		
+		foreach($words as $search => $replace){
+			
+			if ( strpos($from, $search) !== false ){
+				$from = str_replace($search, $replace, $from);	
+			}
+				
+		}
+		
+		return trim($from);
+	}
+	
 	
 }
 

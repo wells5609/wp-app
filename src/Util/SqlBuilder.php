@@ -1,30 +1,52 @@
 <?php
+if ( !function_exists("maybe_drop_table") ):
+
+	function maybe_drop_table($table_name, $drop_ddl) {
+		global $wpdb;
+		foreach ($wpdb->get_col("SHOW TABLES",0) as $table ) {
+			if ($table == $table_name) {
+				// found it, try to drop it.
+				$wpdb->query($drop_ddl);
+			}
+		}
+		// we cannot directly tell that whether this succeeded!
+		foreach ($wpdb->get_col("SHOW TABLES",0) as $table ) {
+			if ($table == $table_name) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+endif;
 
 class SqlBuilder {
 	
-	public function install( $schema ){
+	public function create_table( $schema ){
 		
 		require_once ABSPATH . 'wp-admin/install-helper.php';
 		
-		$install = $results = array();
+		$table = $schema['table'];
 		
-		if ( !is_array($schema) )
-			$schema = array($schema);
-			
-		foreach($schema as $s){
-			
-			$install[ $s['table'] ] = self::sql_create_table($s);
-		}
+		$sql = self::sql_create_table($schema);
 		
-		foreach($install as $table => $sql){
-		
-			$results[ $table ] = maybe_create_table( $table, $sql );	
-		}
-		
-		return $results;
+		$result = maybe_create_table( $table, $sql );	
+				
+		return $result;
 	}
 	
-	protected function sql_create_table( $schema ){
+	public function drop_table( $schema ){
+		
+		$table = $schema['table'];
+		
+		$sql = self::sql_drop_table($schema);
+		
+		$result = maybe_drop_table( $table, $sql );	
+				
+		return $result;	
+	}
+	
+	public function sql_create_table( $schema ){
 		
 		global $wpdb;
 
@@ -42,7 +64,7 @@ class SqlBuilder {
 	
 		$sql = "CREATE TABLE {$wpdb->$table_basename} (";
 		
-		foreach($schema['field_names'] as $name => $settings){
+		foreach($schema['columns'] as $name => $settings){
 			$sql .= "\n  {$name} {$settings},";
 		}
 		
@@ -71,7 +93,25 @@ class SqlBuilder {
 		
 		return $sql;
 	}
+	
+	public function sql_drop_table( $schema ){
 		
+		global $wpdb;
+
+		$table = $schema['table'];
+		
+		if ( !isset($wpdb->{$schema['table_basename']}) ){
+			vardump($schema, $table);
+			throw new InvalidArgumentException("Trying to dump invalid table $table");
+			return false;
+		}
+		
+		$sql = "DROP TABLE $table";
+		
+		return $sql;
+	}
+	
+	
 }
 
 ?>

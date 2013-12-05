@@ -7,29 +7,40 @@
 	$all_tables = $tables['registered'];
 	$installed_tables = $tables['installed'];
 	
-	//$action_message = $Admin->page_request($all_tables, $installed_tables);
+	$action_message = $Admin->page_request($all_tables, $installed_tables);
 	
-	vardump( array_keys($Admin->get_schemas()), $all_tables, $installed_tables );
+	vardump( $all_tables, $installed_tables );
 	
-	$page_slug = 'app-tables';
+	$page_url = 'tools.php?page=app-tables';
 	
 	if ( isset($action_message) && $action_message ){
-		echo '<div id="message" class="';
-		if ( in_array(0, $action_message) ){
-			echo 'error">';
-		}
-		else
-			echo 'updated">';
 		
-		foreach($action_message as $table => $success){
-			echo '<p><b>Table ';
-			if ( true === $success )
-				echo $table . ' was installed!';
+		foreach($action_message as $operation => $table){
+			
+			$s = '<div id="message" class="';
+			
+			if ( in_array(0, $table) )
+				$s .= 'error">';
 			else
-				echo $table . ' could not be installed.';
-			echo '</b></p>';
+				$s .= 'updated">';
+			
+			if ( 'drop' == $operation )
+				$verb = 'dropped';
+			elseif ( 'install' == $operation )
+				$verb = 'installed';
+			
+			foreach($table as $tbl => $success){
+				
+				if ( true === $success )
+					$preposition = 'was';
+				else 
+					$preposition = 'could not be';
+				
+				$s .= "<p><b>Table {$tbl} {$preposition} {$verb}!</b></p>";
+			}
+			
+			$s .= '</div>';	
 		}
-		echo '</div>';
 	}
 	
 ?>
@@ -37,7 +48,8 @@
 	<div id="icon-options-general" class="icon32"><br /></div>
 	<h2>App Tables</h2>
 	<div class="clear"></div>
-	<form action="admin.php?page=<?php echo $page_slug; ?>" method="post">
+	<form action="<?php echo $page_url; ?>" method="post">
+		
 		<?php wp_nonce_field('update-options'); ?>
 		
 		<table id="all-plugins-table" class="widefat">
@@ -72,11 +84,11 @@
 						<strong><?php echo $fullname; ?></strong>
 						<div class="row-actions-visible">
 							<?php if ( $active ) {
-								$url = "admin.php?page={$page_slug}&amp;action=drop&amp;table={$fullname}";
+								$url = "{$page_url}&amp;action=drop&amp;table={$fullname}";
 								echo '<a href="' . esc_url(wp_nonce_url($url, 'update-options')) . '" title="' . esc_attr('Drop this table') . '" class="edit">' . __('Drop') . '</a>';
 							}
 						else {
-							$url = "admin.php?page={$page_slug}&amp;action=install&amp;table={$fullname}";
+							$url = "{$page_url}&amp;action=install&amp;table={$fullname}";
 							echo '<a href="' . esc_url(wp_nonce_url($url, 'update-options')) . '" title="' . esc_attr('Install this table') . '" class="edit">' . __('Install') . '</a>';
 						} ?>
 						</div>

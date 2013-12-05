@@ -1,4 +1,5 @@
 <?php
+
 class FormHandler {
 	
 	public $msgs		= array();
@@ -17,6 +18,11 @@ class FormHandler {
 	*/
 		protected $_form_data;
 	
+	
+	/**
+	* Whether to sanitize the form data
+	*/
+		protected $sanitize_args = true;
 	
 	/**
 	* Methods to run during validation
@@ -43,6 +49,8 @@ class FormHandler {
 	*/
 		protected $processes = array();
 	
+	
+		protected $on_complete = array();
 	
 	/**
 	* HTTP methods to accept
@@ -100,12 +108,17 @@ class FormHandler {
 	* Will set a var with method's name - e.g. $this->POST, $this->GET
 	* Also sets generic $_form_data var
 	*/
-	public function __construct( $args, $method = 'POST' ){
+	final function __construct( $args, $method = 'POST' ){
 		
 		$method = strtoupper($method);
 		
 		if ( isset($this->_valid_methods[$method]) ){
+			
 			$this->method = $method;
+			
+			//if ( $this->sanitize_args )
+				//$this->sanitize($args);
+			
 			$this->$method = $this->_form_data = $args;
 		}
 		else {
@@ -118,11 +131,18 @@ class FormHandler {
 	}
 	
 	
+	function is_ajax(){
+		return (
+			!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest'
+			|| defined("DOING_AJAX") && DOING_AJAX
+		);
+	}
+	
+	
 	// Sets up stuff for handler
 	protected function init(){
 		// for child classes
 	}
-	
 	
 	public function is_error(){
 		return $this->is_error;	
@@ -177,25 +197,41 @@ class FormHandler {
 			return $this->send_error();
 		
 		foreach($this->pre_processes as $pre_process){
+			
 			$this->$pre_process();
 		}
 		
 		foreach($this->processes as $process){
 			
-			if ( is_callable( array($this, 'pre_' . $process) ) ){
-				$this->{pre_ . $process}();
-			}
-			
 			$this->runMethod($process);
 		}
 		
 		$this->success = true;
+		
+		if ( !empty($this->on_complete) ){
+			foreach($this->on_complete as $complete){
+				$this->runMethod($complete);	
+			}	
+		}
+		
 	}
 	
-	
+	/**
+	* Runs a method
+	* Calls its pre_*() method prior to running
+	* Adds method to $_methods_run for debugging
+	*/
 	final private function runMethod( $method ){
+		
 		if ( is_callable(array($this, $method)) ){
+			
+			if ( is_callable( array($this, 'pre_' . $method) ) ){
+				$this->{'pre_'.$method}();
+				$this->_methods_run[ 'pre_'.$method ] = 'pre_'.$method;
+			}
+			
 			$this->$method();
+			
 			$this->_methods_run[ $method ] = $method;
 		}
 	}
@@ -233,6 +269,31 @@ class FormHandler {
 	}
 	
 	
+	public function display_messages($button = true){
+		
+		if ( $this->is_error() ){
+			foreach($this->get_errors() as $type => $msg){
+				echo '<div class="alert alert-danger"><button type="button" class="close" aria-hidden="true" data-dismiss="alert">&times;</button><h4>Error</h4><p>' . $msg . '</p>';
+				if ( $button ) echo '<button type="button" class="btn btn-danger" data-dismiss="alert">Ok</button>';
+				echo '</div>';
+			}
+		}
+		else if ( $this->success ){
+			foreach($this->msgs as $message){
+				echo '<div class="alert alert-success"><button type="button" class="close" aria-hidden="true" data-dismiss="alert">&times;</button><p>' . $message . '</p>';
+				if ( $button ) echo '<button type="button" class="btn btn-success" data-dismiss="alert">Ok</button>';
+				echo '</div>';	
+			}
+		}	
+	}
+	
+	public function display_messages_if_ajax(){
+		if ( $this->is_ajax() ){
+			die( $this->display_messages() );
+		}
+	}
+	
+	
 	// Run before insert_wp_post();
 	protected function set_wp_post_for_insert(){}
 	
@@ -241,8 +302,9 @@ class FormHandler {
 		
 		$this->set_wp_post_for_insert();
 		
-		if ( !isset($this->wp_post) )
-			throw new Exception('var "wp_post" not set - cannot run insert_wp_post()');
+		if ( !isset($this->wp_post) ){
+			throw new Exception('var "wp_post" not set - cannot run FormHandler::insert_wp_post()');
+		}
 		
 		$this->post_id = wp_insert_post($this->wp_post);
 		
@@ -263,8 +325,9 @@ class FormHandler {
 				$this->runMethod('insert_wp_post');
 			elseif ( method_exists($this, 'set_post_id') )
 				$this->runMethod('set_post_id');
-			else
+			else {
 				throw new Exception('Ran set_post_terms() too early. No post_id set');
+			}
 		}
 		
 		foreach($this->post_terms as $taxonomy => $terms){

@@ -10,9 +10,8 @@ class Company_Meta_Model extends Meta_Model {
 		'ticker'			=> "varchar(8) NOT NULL",
 		'meta_key'			=> "varchar(255) NOT NULL",
 		'meta_value'		=> "longtext default NULL",
-		'is_updated'		=> "tinyint default 0",
-		'time_updated'		=> "timestamp default 0",
-		'update_interval'	=> "int(8) default 0",
+		'time_updated'		=> "bigint(20) NOT NULL default 0",
+		'update_interval'	=> "int(16) NOT NULL default 0",
 	);
 	
 	public $primary_key = 'meta_id';
@@ -34,8 +33,19 @@ class Company_Meta_Model extends Meta_Model {
 	*/
 	public $id_column = 'post_id';
 	
-	
 	public $_object_class = 'Company_Meta_Object';
+	
+	
+	protected function before_insert( &$data, &$format ){
+		
+		if ( empty($data['ticker']) ){
+			
+			$postx =& get_postx( $data['post_id'] );
+			
+			$data['ticker'] = $postx->ticker;
+			$format[] = '%s';
+		}
+	}
 	
 	
 }

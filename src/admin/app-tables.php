@@ -1,12 +1,7 @@
 <?php
-
 class AppAdmin_InstallTables {
 	
 	private static $instance;
-	
-	public static $schemas = array();
-	
-	public static $tables = array();
 	
 	public static function instance() {
 		if ( !isset(self::$instance) ) {
@@ -21,21 +16,31 @@ class AppAdmin_InstallTables {
 	
 	public function admin_menu(){
 		$page = add_submenu_page('tools.php', 'App Tables', 'App Tables', 'manage_options', 'app-tables', array($this, 'admin_page'));
+		
+		// Add print scripts and styles action based off the option page hook
+        //add_action( 'admin_print_scripts-' . $page, array( $this, 'admin_scripts' ) );
+        add_action( 'admin_print_styles-' . $page, array( $this, 'admin_styles' ) );
+	}
+	
+	function admin_styles(){
+?>
+<style type="text/css">
+.
+</style>
+<?php	
 	}
 	
 	public function admin_page(){
 		if ( ! current_user_can('manage_options') )
 			return 'You are not authorized to view this page.';
+		
+		App::instance();
 		require 'app-tables-page.php';
-	}
-	
-	public function get_schemas(){
-		return Registry::get_schemas();
 	}
 	
 	public function get_schema_by_table( $table ){
 		
-		foreach($this->get_schemas() as $name => $schema){
+		foreach( get_schemas() as $name => $schema ){
 			
 			if ( $schema['table_basename'] == $table || $schema['table'] == $table )
 				return $schema;
@@ -47,7 +52,7 @@ class AppAdmin_InstallTables {
 		
 		$tables = $installed_tables = array();
 		
-		foreach($this->get_schemas() as $schema){
+		foreach( get_schemas() as $schema ){
 			
 			$tables[ $schema['table_basename'] ] = $wpdb->prefix . $schema['table_basename'];
 		}
@@ -63,9 +68,7 @@ class AppAdmin_InstallTables {
 		if ( 'installed' == $type )
 			return $installed_tables;
 		
-		self::$tables = array('registered' => $tables, 'installed' => $installed_tables);
-		
-		return self::$tables;
+		return array('registered' => $tables, 'installed' => $installed_tables);
 	}
 	
 	
@@ -76,22 +79,15 @@ class AppAdmin_InstallTables {
 	private function page_request($all_tables, &$installed_tables){
 		
 		// _wpnonce field is present => means form was submitted
-		if (!empty($_REQUEST['_wpnonce']) && wp_verify_nonce($_REQUEST['_wpnonce'], "update-options")) {
+		if ( !empty($_REQUEST['_wpnonce']) && wp_verify_nonce($_REQUEST['_wpnonce'], "update-options") ) {
 			
 			// Check that at least 1 action and table was selected
-			if (( !empty($_REQUEST['action']) || !empty($_REQUEST['action2']) ) 
-			&& ( !empty($_REQUEST['table']) || !empty($_REQUEST['tables']) )) {
+			if ( !empty($_REQUEST['action']) && !empty($_REQUEST['table']) ) {
 				
-				if (!empty($_REQUEST['action']))
-					$action = $_REQUEST['action'];
-				else $action = $_REQUEST['action2'];
+				require APP_PATH . '/src/Util/SqlBuilder.php';
 				
-				// Bulk edit
-				if (!empty($_REQUEST['tables']))
-					$tables = $_REQUEST['tables'];
-				// Single edit
-				else $tables = array($_REQUEST['table']);
-				
+				$action = $_REQUEST['action'];
+				$tables = array( $_REQUEST['table'] );
 				$successes = array();
 				
 				foreach ($tables as $table) :
@@ -99,25 +95,27 @@ class AppAdmin_InstallTables {
 					// validate table
 					if ( in_array($table, $all_tables) ) {
 						
-						// we are installing and table is not => add to array
-						if ( $action == 'install' && !in_array($table, $installed_tables) ) {
+						// get schema
+						$schema = $this->get_schema_by_table($table);
+												
+						// we are installing and table is not installed => add to array
+						if ( 'install' == $action && !in_array($table, $installed_tables) ) {
 							
-							$schema = $this->get_schema_by_table($table);
-							
-							//$successes[$table] = SqlBuilder::install($schema);
+							$successes['install'][ $table ] = SqlBuilder::create_table($schema);
 							
 							$installed_tables[] = $table;
 						}
 						
 						// we are deactivating
 						else if ( $action == 'drop' ) {
+							
 							// table is found in $installed_tables => remove from array
 							$index = array_search($table, $installed_tables);
+							
 							if ($index !== false)
 								unset($installed_tables[$index]);
-								
-							# do deactivation...
 							
+							$successes['drop'][ $table ] = SqlBuilder::drop_table($schema);
 						}
 					}
 				

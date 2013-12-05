@@ -1,121 +1,154 @@
 <?php
-
 class Registry {
 	
-	static public $data = array();
+	public $datatypes = array();
 	
-	static private $_instance;
-		
+	static public $objects = array();
 	
-	static function instance(){
+	static protected $_instance;
+	
+	static final function instance(){
 		if ( !isset(self::$_instance) ){
 			self::$_instance = new self();	
 		}
 		return self::$_instance;
 	}
 	
-	
-	// gets one data
-	function get_one( $component, $type ){
-		
-		if ( !isset(self::$data[ $type ][ $component ]) ){
-			
-			$_this = self::instance();
-			
-			$class = $_this->classFromName($component, $type);
-		
-			self::$data[$type][$component] = new $class();
-		}
-		
-		return self::$data[$type][$component];
-	}
-	
-	function get_all_for_type( $type ){
-		
-		$r = array();
-		
-		if ( isset(self::$data[$type]) ){
-			$r = self::$data[$type];	
-		}
-		
-		return $r;
-	}
-	
-	// returns all datas
-	function get_all(){
-		return self::$data;	
-	}
-	
-	
-	function classFromName( $component, $name ){
-		
-		$class = ucwords(str_replace('-', ' ', $name));
-		$class = trim(str_replace(' ', '', $class));
-		
-		if ( strpos($class, $component) === false )
-			$class .= $component;	
-		
-		return $class;
-	}
-	
-	
-	/** Managers, their Models, their Schemas */
-	
-	/**
-	* Registers a data
-	*/
-	function register_manager( $name, &$object = null ){
+	// can call static
+	function register_datatype( $type, $args = array() ){
 		
 		$_this = self::instance();
+		$datatype = format_class_underscore($type);
 		
-		if ( class_exists('AppApi') ){
-			// Add feature support
-			$_name = strtolower($name);
+		$args = wp_parse_args($args, array('has_meta' => false));
+		
+		if ( !empty($args['extends_post_type']) ){
 			
-			if ( 'postx' === $_name )
-				AppApi::instance()->add_support('postx');		
-			elseif ( 'meta' === $_name )
-				AppApi::instance()->add_support('meta');
+			PostExtender::instance()->register_extended_post_type( $args['extends_post_type'] );
 		}
 		
-		if ( !isset(self::$data['Manager'][$name]) ){
-			
-			if ( null !== $object )
-				self::$data['Manager'][$name] =& $object;
-			
-			else
-				self::$data['Manager'][$name] =& $_this->get_manager($name);
-		}
+		if ( empty($args['model_class']) )
+			$args['model_class'] = $datatype . '_Model';	
+		
+		if ( $args['has_meta'] && empty($args['meta_model_class']) )
+			$args['meta_model_class'] = $datatype . '_Meta_Model';
+		
+		$_this->datatypes[ $datatype ] = $args;
 		
 		return $_this;
 	}
-	
-	// deregisters a Manager
-	function deregister_manager( $name ){
-		unset(self::$data['Manager'][$name]);
-		return self::instance();
-	}
-	
-	// gets a Manager
-	function get_manager( $name ){
 		
-		if ( isset(self::$data['Manager'][$name]) )
-			return self::$data['Manager'][$name];
+	// can call static
+	function get_object_instance( $data_type, $object_type = 'model' ){
 		
-		$manager = self::instance()->classFromName('Manager', $name);
+		$_this = self::instance();
+		$datatype = format_class_underscore($data_type);
 		
-		if ( !class_exists($manager) ){
-			$manager = 'Manager'; // use default class 'Manager'
+		if ( !isset($_this->datatypes[ $datatype ]) )
+			return null;
+		
+		switch($object_type){
+			case 'model':
+			default:
+				$class = $_this->datatypes[$datatype]['model_class'];
+				break;
+			case 'meta_model':
+				if ( !$_this->datatypes[$datatype]['has_meta'] )
+					return false;
+				$class = $_this->datatypes[$datatype]['meta_model_class'];
+				break;
+			case 'helper':
+				$class = format_class_underscore($datatype . 'Helper');
+				break;
 		}
 		
-		self::$data['Manager'][$name] =& call_user_func( array($manager, 'instance') );
-		
-		return self::$data['Manager'][$name];
+		if ( !isset(self::$objects[ $class ]) ){
+			self::$objects[ $class ] = new $class();	
+		}
+		return self::$objects[ $class ];
 	}
 	
-	function get_managers(){
-		
-		return self::$data['Manager'];
+	// can call static
+	function get_datatype_info( $data_type ){
+		$_this = self::instance();
+		return $_this->datatypes[ format_class_underscore($data_type) ];
 	}
 	
+	/**
+	* Used by function get_model()
+	*/
+	public function get_model( $type ){
+		return $this->get_object_instance($type, 'model');	
+	}
+	
+	/**
+	* Used by function get_meta_model()
+	*/
+	public function get_meta_model( $type ){
+		return $this->get_object_instance($type, 'meta_model');	
+	}
+	
+	/**
+	* Used by function get_helper()
+	*/
+	public function get_helper( $type ){
+		return $this->get_object_instance($type, 'helper');	
+	}
+	
+	/**
+	* Used by function get_models()
+	*/
+	public function &get_objects_of_type( $object_type ){
+		$objects = array();
+		foreach($this->get_datatypes() as $datatype){
+			if ( isset($this->datatypes[$datatype]) )
+				$objects[ $datatype ] =& $this->{'get_' . $object_type}($datatype);
+		}
+		return $objects;	
+	}
+	
+	public function &get_datatype_objects( $type ){
+		
+		$objects = array();
+		$datatype = format_class_underscore($type);
+		
+		if ( isset($this->datatypes[ $datatype ]) ){
+			
+			foreach(array('model', 'meta_model', 'helper') as $obj_type){
+				
+				if ( isset($this->data_types[$datatype][$obj_type]) )
+					
+					$objects[ $datatype ] =& $this->{'get_' . $obj_type}($datatype);
+			}
+		}
+		
+		return $objects;	
+	}
+	
+	public function get_datatypes(){
+		return array_keys( $this->datatypes );	
+	}
+	
+	public function is_registered_datatype( $type ){
+		return isset($this->datatypes[ format_class_underscore($type) ]) ? true : false;	
+	}
+	
+	// debugging
+	
+	function dump_objects(){
+		return self::$objects;
+	}
+	
+	function dump_datatypes(){
+		return self::instance()->datatypes;
+	}
+			
+}
+
+function registry_dump(){
+	$Registry = Registry::instance();
+	return array(
+		'objects' => $Registry->dump_objects(),
+		'datatypes' => $Registry->dump_daatatypes()
+	);
 }

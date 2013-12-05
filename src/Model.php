@@ -12,7 +12,8 @@ abstract class Model {
 	/** 
 	* Unprefixed table name
 	*
-	* This must be set by user
+	* This must be set like 'bears' for 'wp_bears'
+	* assuming prefix is wp_
 	*/
 	public $table_basename;
 	
@@ -21,7 +22,7 @@ abstract class Model {
 	* 
 	* The table columns
 	* 
-	* Array of 'column' => 'SQL string'
+	* Array of 'column' => 'SQL create string'
 	* e.g. 'id' => 'bigint(20) unsigned NOT NULL auto_increment'
 	*/
 	public $columns = array();
@@ -29,11 +30,9 @@ abstract class Model {
 	
 	/** $primary_key
 	*
-	* (required)
-	*
-	* @var string
+	* Required string
 	*/
-	public $primary_key;
+	public $primary_key; ####TO-DO####
 	
 	
 	/** $unique_keys 
@@ -57,26 +56,33 @@ abstract class Model {
 	*/
 	public $_object_class = 'Object';
 	
-	
+		
 	/** Constructor	
 	*
-	* Sets up schema and wpdb
+	* Sets up table name and wpdb
 	*
 	*/
-		function __construct(){
+		final function __construct(){
 			
 			global $wpdb;
+			
+			// set the table name
+			$this->table = $wpdb->prefix . $this->table_basename;	
 			
 			// add table basename to $tables array
 			if ( !in_array($this->table_basename, $wpdb->tables) )
 				$wpdb->tables[] = $this->table_basename;
 			
-			// set the table name
-			$this->table = $wpdb->prefix . $this->table_basename;	
-			
 			// add the table name to $wpdb (as property)
 			if ( !isset($wpdb->{$this->table_basename}) )
 				$wpdb->{$this->table_basename} = $this->table;
+			
+			// add column formats that aren't strings
+			foreach($this->columns as $col => $settings){
+				$format = $this->get_column_format($col);
+				if ( '%s' !== $format )
+					$wpdb->field_types[ $col ] = $format;
+			}
 			
 		}
 	
@@ -102,25 +108,29 @@ abstract class Model {
 	* string => %s (default)
 	*/
 		public function get_column_format($column){
-			if ( !isset($this->columns[$column]) )
+			if ( !$this->is_column($column) )
 				return false;
 			
 			$field = strtolower($this->columns[$column]);
 			
-			if ( strpos($field, 'int') !== false )
+			if ( strpos($field, 'int') !== false || strpos($field, 'time') !== false )
 				return '%d';
-			elseif ( strpos($field, 'float') !== false )
+			if ( strpos($field, 'float') !== false )
 				return '%f';
 			else
 				return '%s';
 		}
+	
+	public function is_column($column){
+		return isset($this->columns[$column]) ? true : false;
+	}
 	
 	/** 
 	* Returns field length max
 	*
 	*/
 		public function get_column_length($column){
-			if ( !isset($this->column[$column]) )
+			if ( !$this->is_column($column) )
 				return false;
 			
 			$field = $this->columns[$column];
@@ -157,6 +167,53 @@ abstract class Model {
 			return new $class( $db_object );	
 		}
 	
+	
+		public function query_by_primary_key( $pk, $select = '*' ){
+			
+			global $wpdb;
+			
+			if ( is_array($select) )
+				$select = implode(', ', $select);
+			
+			$primary_key = $this->primary_key;
+			
+			$sql = "SELECT $select FROM `{$this->table}` WHERE `$primary_key` = $pk";
+			
+			return $wpdb->get_row( $sql );
+		}
+		
+		public function get_primary_key_where( $where ){
+			
+			$sql = "SELECT {$this->primary_key} FROM `{$this->table}` WHERE ";
+			
+			if ( is_array($where) ){
+					
+				foreach($where as $col => $val){
+					
+					if ( empty($val) )
+						throw new Exception('SQL Error: empty ' . $col . ' in ' . __FUNCTION__);
+					
+					$val = esc_sql($val);
+					$format = $this->get_column_format($col);
+					
+					if ( '%s' === $format ){
+						$val = like_escape( $val );
+						$wheres[] = "$col LIKE '$val'";	
+					}
+					else{
+						$wheres[] = "$col = $val";	
+					}
+				}
+			
+				$sql .= implode(" AND ", $wheres );
+			}
+			else {
+				$sql .= trim($where);	
+			}
+				
+			return $this->get_var( $sql );
+		}
+		
 
 	/** query_by
 	*
@@ -172,21 +229,19 @@ abstract class Model {
 			
 			global $wpdb;
 						
-			if ( !isset($this->column[$column]) )
-				throw new InvalidArgumentException('field must be a valid table column');
+			if ( !isset($this->columns[$column]) )
+				throw new InvalidArgumentException('invalid field ' . $column . 'field must be a valid table column');
 			
 			$sql_args = array(
 				$column_where,
 			);
 			
-			if ( !is_string($select) ) {
-				if ( is_array($select) )
-					$select = implode(', ', $select);
-			}
-			
+			if ( is_array($select) )
+				$select = implode(', ', $select);
+						
 			$column_type = $this->get_column_format($column);
 			
-			$sql = "SELECT $select FROM `{$this->table}` WHERE `{$column}` = $column_type";
+			$sql = "SELECT $select FROM {$this->table} WHERE $column = $column_type";
 			
 			if ( !empty($extra_where) ){
 				
@@ -195,8 +250,10 @@ abstract class Model {
 				$wheres = $where_vals = array();
 				
 				foreach($extra_where as $col => $val){
-					$_format = $this->get_column_format($col);
-					$wheres[] = "`$col` = {$_format}";
+					if ( empty($val) )
+						throw new Exception('SQL Error: empty ' . $col . ' in ' . __FUNCTION__);
+					$format = $this->get_column_format($col);
+					$wheres[] = "$col = $format";
 					$where_vals[] = $val;
 				}
 				
@@ -225,25 +282,37 @@ abstract class Model {
 			
 			foreach($where as $field => $arg ){
 				
+				if ( empty($arg) )
+					throw new Exception('SQL Error: empty "' . $field . '" in ' . __FUNCTION__);
+					
 				if ( !isset($this->columns[$field]) )
 					throw new InvalidArgumentException('field must be a valid table column');
 				
 				$format = $this->get_column_format($field);
 				
-				$sql_wheres[] = "`$field` = {$format}";
+				$sql_wheres[] = "$field = $format";
 				$sql_args[] = $arg;
 			}
 			
-			if ( is_string($select) )
-				$sel = $select;
-			elseif ( is_array($select) )
-				$sel = implode(', ', $select);
+			if ( is_array($select) )
+				$select = implode(', ', $select);
 			
-			$sql = "SELECT $sel FROM {$this->table} WHERE " . implode(" AND ", $sql_wheres );
+			$sql = "SELECT $select FROM {$this->table} WHERE " . implode(" AND ", $sql_wheres );
 			
 			return $wpdb->get_row( $wpdb->prepare($sql, $sql_args) );
 		}
-
+	
+	
+	public function update_var( $name, $value, array $where, $force_exists = true ){
+		
+		if ( !$force_exists ){
+			$exists = $this->query_by_multiple( $where, $name );
+			if ( $exists ) return false;
+		}
+		return $this->update( array($name => $value), $where );
+		
+	}
+	
 		
 	/**
 	* 
@@ -360,13 +429,9 @@ abstract class Model {
 			
 			global $wpdb;
 			
-			$result = $wpdb->get_row( $query, $output, $y );
+			$row = $wpdb->get_row( $query, $output, $y );
 			
-			if ( !empty($result) ){
-				return $this->forgeObject($result);	
-			}
-			
-			return $result;
+			return $this->forgeObject( $row );	
 		}
 	
 	
@@ -406,8 +471,27 @@ abstract class Model {
 	 * @see wpdb::get_results()
 	 */
 		public function get_results( $string, $output_type = OBJECT ) {
+			
 			global $wpdb;
-			return $wpdb->get_results( $string, $output_type );
+			
+			$results = $wpdb->get_results( $string, $output_type );
+			
+			if ( is_object($results) )
+				return $this->forgeObject( $results );
+			
+			if ( is_array($results) ){
+				
+				$r = array();
+				
+				foreach($results as $result){
+					if ( is_object($result) )
+						$r[] =& $this->forgeObject($result);	
+					else
+						$r[] = $result;
+				}
+			}
+			
+			return $r;
 		}
 	
 }
