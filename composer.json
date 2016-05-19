@@ -17,11 +17,9 @@
     "autoload": {
         "psr-4": {
             "WordPress\\": "src/"
-        }
-    },
-    "extra": {
-        "branch-alias": {
-            "dev-master": "1.0.0"
-        }
+        },
+	"files": [
+	    "src/WordPress.php"
+	]
     }
 }
