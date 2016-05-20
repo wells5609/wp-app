@@ -1,6 +1,6 @@
 <?php
 
-namespace WordPress\Post;
+namespace WordPress\Data\Post;
 
 class Query 
 {
@@ -113,6 +113,9 @@ class Query
 	
 	public function __invoke() {
 		$this->results = get_posts($this->args);
+		if (! empty($this->results)) {
+			$this->results = array_map('custom_post', $this->results);
+		}
 		return $this;
 	}
 	

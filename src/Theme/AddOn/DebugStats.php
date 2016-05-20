@@ -13,11 +13,7 @@ class DebugStats implements AddOnInterface
 	}
 	
 	public function load(ActiveTheme $theme) {
-		add_action('wp_footer', array($this, 'render'), 9999);
-	}
-	
-	public function render() {
-		echo wp_debug();
+		add_action('wp_footer', 'WordPress\Support\Debug::printHtml', PHP_INT_MAX);
 	}
 	
 }

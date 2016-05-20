@@ -1,12 +1,14 @@
 <?php
 
-namespace WordPress\DataModel;
+namespace WordPress\Database;
 
+use WordPress\Data\RepositoryInterface;
+use WordPress\Data\EntityInterface;
 use WordPress\Database\Table\Schema;
 use RuntimeException;
 use InvalidArgumentException;
 
-class Model implements \Serializable
+class Repository implements RepositoryInterface
 {
 	
 	/**
@@ -19,8 +21,11 @@ class Model implements \Serializable
 	 */
 	protected $db;
 	
+	/**
+	 * Constructor.
+	 */
 	public function __construct(Schema $schema) {
-		$this->init($schema);
+		$this->initialize($schema);
 	}
 	
 	/**
@@ -32,79 +37,101 @@ class Model implements \Serializable
 	}
 	
 	/**
- 	 * Queries the database using multiple fields (i.e. column)
-	 *
-	 * @param array $where Array of "column" => "value" args
-	 * @param string $select The SQL "SELECT" string
-	 * @return mixed
-	*/	
-	public function find(array $where, $select = '*') {
+	 * Returns the repository's entity type name.
+	 * 
+	 * @return string
+	 */
+	public function getEntityTypeName() {
+		return $this->schema->name;
+	}
+	
+	/**
+	 * Returns all entities matching $args.
+	 * 
+	 * @param mixed $where [Optional]
+	 * 
+	 * @return array
+	 */
+	public function find($where = null) {
 		
 		$sql_wheres = $sql_args = array();
 		
-		foreach($where as $field => $arg) {
-			
-			if (empty($arg)) {
-				throw new RuntimeException('SQL Error: empty "'.$field.'" in '.__FUNCTION__);
-			}
-			
-			if (! $this->schema->isColumn($field)) {
-				throw new InvalidArgumentException('Field must be a valid table column');
-			}
-			
+		foreach((array)$where as $field => $arg) {
+			$this->assertValidWhereArgument($field, $arg, __FUNCTION__);
 			$sql_wheres[] = "{$field} = ".$this->schema->getColumnFormatString($field);
 			$sql_args[] = $arg;
 		}
 		
-		if (is_array($select)) {
-			$select = implode(', ', $select);
-		}
-		
-		$sql = "SELECT $select FROM {$this->schema->table_name} WHERE ".implode(" AND ", $sql_wheres);
+		$sql = "SELECT * FROM {$this->schema->table_name} WHERE ".implode(' AND ', $sql_wheres);
 		
 		$results = $this->db->get_results($this->db->prepare($sql, $sql_args));
 		
 		if (empty($results)) {
-			return $results;
+			return array();
 		}
 		
 		return array_map(array($this, 'forgeObject'), $results);
 	}
 	
 	/**
- 	 * Queries the database using multiple fields (i.e. column)
-	 *
-	 * @param array $where Array of "column" => "value" args
-	 * @param string $select The SQL "SELECT" string
-	 * @return mixed
-	*/	
-	public function findOne(array $where, $select = '*') {
+	 * Returns a single entity matching $args.
+	 * 
+	 * @param mixed $where
+	 * 
+	 * @return \WordPress\Data\EntityInterface
+	 */
+	public function findOne($where) {
 		
 		$sql_wheres = $sql_args = array();
 		
-		foreach($where as $field => $arg) {
-			
-			if (empty($arg)) {
-				throw new RuntimeException('SQL Error: empty "'.$field.'" in '.__FUNCTION__);
-			}
-			
-			if (! $this->schema->isColumn($field)) {
-				throw new InvalidArgumentException('Field must be a valid table column');
-			}
-			
+		foreach((array)$where as $field => $arg) {
+			$this->assertValidWhereArgument($field, $arg, __FUNCTION__);
 			$sql_wheres[] = "{$field} = ".$this->schema->getColumnFormatString($field);
 			$sql_args[] = $arg;
 		}
 		
-		if (is_array($select)) {
-			$select = implode(', ', $select);
-		}
-		
-		$sql = "SELECT $select FROM {$this->schema->table_name} WHERE ".implode(" AND ", $sql_wheres);
+		$sql = "SELECT * FROM {$this->schema->table_name} WHERE ".implode(" AND ", $sql_wheres);
 		
 		$results = $this->db->get_row($this->db->prepare($sql, $sql_args));
 		
-		return empty($results) ? $results : $this->forgeObject($results);
+		return empty($results) ? null : $this->forgeObject($results);
+	}
+	
+	/**
+	 * Saves the given entity.
+	 * 
+	 * @param \WordPress\Data\EntityInterface $entity
+	 * 
+	 * @return int
+	 */
+	public function save(EntityInterface $entity) {
+		
+		$data = $entity->getStorageData();
+		$pk = $this->schema->primary_key;
+		
+		if (! isset($data[$pk])) {
+			return $this->insert($data);
+		}
+		
+		$entityPkValue = $data[$pk];
+		unset($data[$pk]);
+		
+		return $this->update($data, array($pk => $entityPkValue));
+	}
+	
+	/**
+	 * Deletes the given entity.
+	 * 
+	 * @param \WordPress\Data\EntityInterface $entity
+	 * 
+	 * @return int
+	 */
+	public function delete(EntityInterface $entity) {
+		$pk = $this->schema->primary_key;
+		if (! isset($entity->$pk)) {
+			throw new RuntimeException("Cannot delete entity: missing value of primary key ({$pk}).");
+		}
+		return $this->deleteWhere(array($pk => $entity->$pk));
 	}
 	
 	/**
@@ -118,31 +145,25 @@ class Model implements \Serializable
 	*/	
 	public function findOneBy($column, $column_where, $select = '*', array $extra_where = array()) {
 					
-		if (! $this->schema->isColumn($column)) {
-			throw new InvalidArgumentException('Invalid field ' . $column . 'field must be a valid table column');
-		}
+		$this->assertValidWhereArgument($column, $column_where, __FUNCTION__);
 		
-		$sql_args = array(
-			$column_where,
-		);
+		$sql_args = array($column_where);
 		
 		if (is_array($select)) {
 			$select = implode(', ', $select);
 		}
 		
-		$colFmtStr = $this->schema->getColumnFormatString($column);
+		$colFormatString = $this->schema->getColumnFormatString($column);
 		
-		$sql = "SELECT $select FROM {$this->schema->table_name} WHERE $column = $colFmtStr";
+		$sql = "SELECT $select FROM {$this->schema->table_name} WHERE $column = $colFormatString";
 		
 		if (! empty($extra_where)) {
 			
 			$sql .= ' AND ';
 			$wheres = $where_vals = array();
 			
-			foreach($extra_where as $col => $val) {
-				if (empty($val)) {
-					throw new RuntimeException('SQL Error: empty '.$col.' in '.__FUNCTION__);
-				}
+			foreach($extra_where as $col => $val) {				
+				$this->assertValidWhereArgument($col, $val, __FUNCTION__);
 				$format = $this->schema->getColumnFormatString($col);
 				$wheres[] = "$col = $format";
 				$where_vals[] = $val;
@@ -155,7 +176,7 @@ class Model implements \Serializable
 		
 		$results = $this->db->get_row($this->db->prepare($sql, $sql_args));
 		
-		return empty($results) ? $results : $this->forgeObject($results);
+		return empty($results) ? null : $this->forgeObject($results);
 	}
 	
 	/**
@@ -165,13 +186,10 @@ class Model implements \Serializable
 	 * @param string $select [Optional] Default = "*"
 	 * @return mixed
 	 */
-	public function findOneByPrimaryKey($pk, $select = '*') {
-		if (is_array($select)) {
-			$select = implode(', ', $select);
-		}
-		$sql = "SELECT $select FROM `{$this->schema->table_name}` WHERE `{$this->schema->primary_key}` = $pk";
+	public function findOneByPrimaryKey($pk) {
+		$sql = "SELECT * FROM `{$this->schema->table_name}` WHERE `{$this->schema->primary_key}` = $pk";
 		$results = $this->db->get_row($sql);
-		return empty($results) ? $results : $this->forgeObject($results);
+		return empty($results) ? null : $this->forgeObject($results);
 	}
 	
 	/**
@@ -197,18 +215,8 @@ class Model implements \Serializable
 	 * @see wpdb::insert()
 	 */
 	public function insert($data, $format = null) {
-		
-		$this->before_insert($data, $format);
-		
-		$success = $this->db->insert($this->schema->table_name, $data, $format);
-		
-		$this->after_insert($success);
-		
-		return $success;
+		return $this->db->insert($this->schema->table_name, $data, $format);
 	}
-		
-	protected function before_insert(&$data, &$format) {}
-	protected function after_insert(&$success) {}
 	
 	/**
 	 * Replace a row into a table.
@@ -216,56 +224,26 @@ class Model implements \Serializable
 	 * @see wpdb::replace()
 	 */
 	public function replace($data, $format = null) {
-		
-		$this->before_replace($data, $format);
-		
-		$success = $this->db->replace($this->schema->table_name, $data, $format, 'REPLACE');
-		
-		$this->after_replace($success);		
-		
-		return $success;
+		return $this->db->replace($this->schema->table_name, $data, $format, 'REPLACE');
 	}
 
-	protected function before_replace(&$data, &$format) {}
-	protected function after_replace(&$success) {}
-	
 	/**
 	 * Update a row in the table
 	 *
 	 * @see wpdb::update()
 	 */
 	 public function update($data, $where, $format = null, $where_format = null) {
-		
-		$this->before_update($data, $where, $format, $where_format);
-		
-		$success = $this->db->update($this->schema->table_name, $data, $where, $format, $where_format);
-		
-		$this->after_update($success);
-		
-		return $success;
+		return $this->db->update($this->schema->table_name, $data, $where, $format, $where_format);
 	}
 
-	protected function before_update(&$data, &$where, &$format, &$where_format) {}
-	protected function after_update(&$success) {}
-	
 	/**
 	 * Delete a row in the table
 	 *
 	 * @see wpdb::delete()
 	 */
-	public function delete($where, $where_format = null) {
-		
-		$this->before_delete($where, $where_format);
-		
-		$success = $this->db->delete($this->schema->table_name, $where, $where_format);
-		
-		$this->after_delete($success);
-		
-		return $success;
+	public function deleteWhere($where, $where_format = null) {
+		return $this->db->delete($this->schema->table_name, $where, $where_format);
 	}
-	
-	protected function before_delete(&$where, &$where_format) {}
-	protected function after_delete(&$success) {}
 	
 	/**
 	 * Retrieve one row from the database.
@@ -324,6 +302,7 @@ class Model implements \Serializable
 		}
 		
 		$list = array();
+		
 		foreach($results as $result) {
 			if (is_object($result)) {
 				$list[] = $this->forgeObject($result);	
@@ -342,14 +321,18 @@ class Model implements \Serializable
 	 * @return object
 	 */
 	public function forgeObject($data) {
+		
 		if (! $data) {
 			return null;
 		}
+		
 		$class = $this->schema->object_class;
 		$object = new $class($data);
+		
 		if ($object instanceof Entity) {
-			$object->setModel($this);
+			$object->setRepository($this);
 		}
+		
 		return $object;
 	}
 	
@@ -359,19 +342,25 @@ class Model implements \Serializable
 	
 	public function unserialize($serial) {
 		$data = unserialize($serial);
-		$this->init($data['schema']);
+		$this->initialize($data['schema']);
 	}
 	
-	protected function init(Schema $schema) {
-		
+	protected function initialize(Schema $schema) {
 		$this->db = $GLOBALS['wpdb'];
 		$this->schema = $schema;
-		
 		if (! isset($this->schema->table_name)) {
 			$this->schema->table_name = $this->db->prefix.$this->schema->name;
 		}
-
 		$schema->build();
+	}
+	
+	protected function assertValidWhereArgument($field, $value, $source) {
+		if (empty($value)) {
+			throw new RuntimeException("SQL Error: empty value for '$field' in '$source'.");
+		}
+		if (! $this->schema->isColumn($field)) {
+			throw new InvalidArgumentException("Invalid table column: '$field'");
+		}
 	}
 	
 }

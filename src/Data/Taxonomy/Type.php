@@ -1,10 +1,10 @@
 <?php
 
-namespace WordPress\Taxonomy;
+namespace WordPress\Data\Taxonomy;
 
 use RuntimeException;
 
-class Custom
+class Type
 {
 	public $slug;
 	public $name;
@@ -37,7 +37,7 @@ class Custom
 	public $update_count_callback; // value of $public
 	public $query_var = true;
 	public $rewrite = true;
-	public $capabilities;
+	public $cap;
 	public $sort;
 	
 	public $object_type;

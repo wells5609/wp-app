@@ -11,7 +11,7 @@ class RequestContext
 	const CUSTOM = 'custom';
 	
 	const ENTRY_INDEX = 'index';
-	const ENTRY_ADMIN = 'wp-admin';
+	const ENTRY_ADMIN = 'admin';
 	const ENTRY_ADMIN_AJAX = 'admin-ajax';
 	const ENTRY_CUSTOM = 'custom';
 	
@@ -28,19 +28,21 @@ class RequestContext
 	public function initialize(\WP $wp) {
 		if (isset($wp->query_vars['rest_route'])) {
 			$this->type = self::REST;
-		} else if ($this->isXhr()) {
+		} else if ($this->isXmlHttpRequest()) {
 			$this->type = self::AJAX;
 		}
 	}
 	
 	public function initializeFinal() {
 		
-		if (is_admin()) {
-			$this->type = self::ADMIN;
-		} else if ('index.php' === $this->script) {
-			$this->type = self::FRONT;
-		} else {
-			$this->type = self::CUSTOM;
+		if (! isset($this->type)) {
+			if (is_admin()) {
+				$this->type = self::ADMIN;
+			} else if ('index.php' === $this->script) {
+				$this->type = self::FRONT;
+			} else {
+				$this->type = self::CUSTOM;
+			}
 		}
 		
 		switch ($this->type) {
@@ -68,20 +70,47 @@ class RequestContext
 		}
 	}
 	
-	public function dump() {
-		
-		var_dump($this);
+	public function getType() {
+		return $this->type;
 	}
 	
 	public function getScriptName() {
-		
+		return $this->script;
 	}
 	
 	public function getEntryPoint() {
-		
+		return $this->entrypoint;
 	}
 	
-	public function isXhr() {
+	public function isFront() {
+		return $this->type === self::FRONT;
+	}
+	
+	public function isREST() {
+		return $this->type === self::REST;
+	}
+	
+	public function isApi() {
+		return $this->isREST();
+	}
+	
+	public function isAdmin() {
+		return $this->type === self::ADMIN;
+	}
+	
+	public function isAjax() {
+		return $this->type === self::AJAX;
+	}
+	
+	public function isAdminAjax() {
+		return $this->entrypoint === self::ENTRY_ADMIN_AJAX;
+	}
+	
+	public function isCustomEntryPoint() {
+		return $this->entrypoint === self::ENTRY_CUSTOM;
+	}
+	
+	public function isXmlHttpRequest() {
 		return isset($_SERVER['HTTP_X_REQUESTED_WITH']) && 'xmlhttprequest' === strtolower($_SERVER['HTTP_X_REQUESTED_WITH']);
 	}
 	

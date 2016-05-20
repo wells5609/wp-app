@@ -1,10 +1,10 @@
 <?php
 
-namespace WordPress\Post\Type;
+namespace WordPress\Data\Post;
 
 use RuntimeException;
 
-class Custom
+class Type
 {
 	// Required
 	public $slug;

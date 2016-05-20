@@ -11,14 +11,33 @@
 class WordPress
 {
 	
+	/**
+	 * @var Composer\Autoload\ClassLoader
+	 */
 	public static $autoloader;
+	
+	/**
+	 * @var WordPress\DI
+	 */
 	public static $di;
+	
+	/**
+	 * @var WordPress\App
+	 */
 	public static $app;
 	
+	/**
+	 * Initialize the kernel
+	 * 
+	 * This method MUST be called at the end of your "config/application.php" file.
+	 * 
+	 * 1. Locate the Composer class loader or create one if it does not exist
+	 * 2. Add the 'WordPress' namespace to autoload classes from the current directory (a la PSR-4)
+	 */
 	public static function init() {
 		
 		foreach(spl_autoload_functions() as $callable) {
-			if (is_array($callable) && is_object($callable[0])) {
+			if (is_array($callable)) {
 				if ($callable[0] instanceof Composer\Autoload\ClassLoader) {
 					self::$autoloader = $callable[0];
 					break;
@@ -34,21 +53,31 @@ class WordPress
 		self::$autoloader->addPsr4('WordPress\\', array(__DIR__));
 	}
 	
-	public static function load(WordPress\DI $di = null) {
+	/**
+	 * Loads the kernel
+	 * 
+	 * 1. Creates the WordPress\DI instance of self::$di if one has not been set
+	 * 2. Adds self::$autoloader to the DI as 'autoloader'
+	 * 3. Creates the WordPress\App instance of self::$app if 'app' does not exist in the DI
+	 * 4. Loads must-use plugins in folders (@Roots/Bedrock)
+	 * 5. Register the theme directory (@Roots/Bedrock)
+	 * 6. Disallow site indexing if non-production (@Roots/Bedrock)
+	 */
+	public static function load() {
 		
-		if (! isset($di)) {
-			$di = new WordPress\Di\FactoryDefault;
+		if (! isset(self::$di)) {
+			self::$di = new WordPress\Di\FactoryDefault;
 		}
+		
+		$di = self::$di;
 		
 		$di->setShared('autoloader', self::$autoloader);
 		
-		self::$di = $di;
-		
-		if ($di->has('app')) {
-			$app = $di->get('app');
-		} else {
-			$di->setShared('app', $app = new WordPress\App($di));
+		if (! $di->has('app')) {
+			$di->setShared('app', new WordPress\App($di));
 		}
+		
+		self::$app = $di->get('app');
 		
 		if (is_blog_installed()) {
 			WordPress\Plugin\MustUsePlugins::load(self::$autoloader);
@@ -60,7 +89,7 @@ class WordPress
 		}
 		
 		// Disallow site indexing on non-production environments
-		if ($app->isDev() && ! $app->isAdmin()) {
+		if (WP_ENV !== 'production' && ! is_admin()) {
 			add_action('pre_option_blog_public', '__return_zero');
 		}
 	}

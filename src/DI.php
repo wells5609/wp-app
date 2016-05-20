@@ -4,69 +4,30 @@ namespace WordPress;
 
 use ArrayAccess;
 use Countable;
-use Closure;
-use RuntimeException;
-use InvalidArgumentException;
 
-class DI implements ArrayAccess, Countable
+interface DI extends \ArrayAccess, \Countable
 {
-	
-	/**
-	 * Default instance.
-	 * 
-	 * @var \WordPress\DI
-	 */
-	protected static $instance;
-	
-	/**
-	 * Services
-	 * 
-	 * @var \WordPress\Di\Service[]
-	 */
-	protected $services = array();
-	
-	/**
-	 * Service aliases.
-	 * 
-	 * @var string[]
-	 */
-	protected $aliases = array();
-	
-	/**
-	 * Constructor
-	 */
-	public function __construct() {
-		if (! isset(static::$instance)) {
-			static::$instance = $this;
-		}
-	}
 	
 	/**
 	 * Returns the default instance, if it exists.
 	 * 
 	 * @return \WordPress\DI|null
 	 */
-	public static function instance() {
-		return static::$instance;
-	}
+	public static function instance();
 	
 	/**
 	 * Sets the default instance.
 	 * 
 	 * @param \WordPress\DI $di
 	 */
-	public static function setInstance(DI $di) {
-		static::$instance = $di;
-	}
+	public static function setInstance(DI $di);
 	
 	/**
 	 * Whether a default instance exists.
 	 * 
 	 * @return boolean
 	 */
-	public static function hasInstance() {
-		return isset(static::$instance);
-	}
+	public static function hasInstance();
 		
 	/* --------------------------------------------------------
 	 * Service accessors and mutators
@@ -79,10 +40,7 @@ class DI implements ArrayAccess, Countable
 	 * 
 	 * @return \WordPress\DI
 	 */
-	public function addService(Di\Service $service) {
-		$this->services[$service->getName()] = $service;
-		return $this;
-	}
+	public function addService(Di\Service $service);
 	
 	/**
 	 * Fetches a service by key.
@@ -91,12 +49,7 @@ class DI implements ArrayAccess, Countable
 	 * 
 	 * @return \WordPress\Di\Service
 	 */
-	public function getService($key) {
-		if ($key = $this->getRealKey($key)) {
-			return $this->services[$key];
-		}
-		return null;
-	}
+	public function getService($key);
 		
 	/* --------------------------------------------------------
 	 * Accessors and mutators
@@ -111,14 +64,7 @@ class DI implements ArrayAccess, Countable
 	 * 
 	 * @return \WordPress\DI
 	 */
-	public function set($key, $value, $shared = false) {
-		if ($shared) {
-			$this->setShared($key, $value);
-		} else {
-			$this->factory($key, $value);
-		}
-		return $this;
-	}
+	public function set($key, $value, $shared = false);
 	
 	/**
 	 * Register a shared dependency.
@@ -128,20 +74,7 @@ class DI implements ArrayAccess, Countable
 	 * 
 	 * @return \WordPress\DI
 	 */
-	public function setShared($key, $value) {
-		
-		$service = new Di\Service($this, $key);
-		
-		if ($value instanceof Di\DiAwareInterface) {
-			$value->setDI($this);
-		}
-		
-		$service->share($value);
-		
-		$this->services[$key] = $service;
-		
-		return $this;
-	}
+	public function setShared($key, $value);
 	
 	/**
 	 * Resolves a dependency value.
@@ -150,23 +83,7 @@ class DI implements ArrayAccess, Countable
 	 * 
 	 * @return mixed
 	 */
-	public function get($key, $arg = null) {
-		
-		$service = $this->getService($key);
-		
-		if (null === $service) {
-			return null;
-		}
-		
-		if (null === $arg) {
-			return $service->resolve();
-		}
-		
-		$args = func_get_args();
-		array_shift($args);
-		
-		return $service->resolve($args);
-	}
+	public function get($key, $arg = null);
 	
 	/**
 	 * Checks whether an item exists with the given key.
@@ -175,10 +92,7 @@ class DI implements ArrayAccess, Countable
 	 * 
 	 * @return boolean
 	 */
-	public function has($key) {
-		$key = $this->getRealKey($key);
-		return null !== $key;
-	}
+	public function has($key);
 	
 	/**
 	 * Removes an item by key.
@@ -187,12 +101,7 @@ class DI implements ArrayAccess, Countable
 	 * 
 	 * @return \WordPress\DI
 	 */
-	public function remove($key) {
-		if ($key = $this->getRealKey($key)) {
-			unset($this->services[$key]);
-		}
-		return $this;
-	}
+	public function remove($key);
 	
 	/**
 	 * Adds a factory method to the container.
@@ -202,20 +111,7 @@ class DI implements ArrayAccess, Countable
 	 * 
 	 * @return \WordPress\DI
 	 */
-	public function factory($key, $factory) {
-		
-		$service = new Di\Service($this, $key);
-		
-		if ($factory instanceof Di\DiAwareInterface) {
-			$factory->setDI($this);
-		}
-		
-		$service->factory($factory);
-		
-		$this->services[$key] = $factory;
-		
-		return $this;
-	}
+	public function factory($key, $factory);
 	
 	/**
 	 * Adds an alias for the given service.
@@ -227,10 +123,7 @@ class DI implements ArrayAccess, Countable
 	 * 
 	 * @return \WordPress\DI
 	 */
-	public function alias($key, $alias) {
-		$this->aliases[$alias] = $key;
-		return $this;
-	}
+	public function alias($key, $alias);
 	
 	/**
 	 * Checks whether the given key is an alias.
@@ -239,9 +132,7 @@ class DI implements ArrayAccess, Countable
 	 * 
 	 * @return bool
 	 */
-	public function isAlias($key) {
-		return isset($this->aliases[$key]);
-	}
+	public function isAlias($key);
 	
 	/**
 	 * Resolves the given alias or key to its real key.
@@ -252,73 +143,7 @@ class DI implements ArrayAccess, Countable
 	 * 
 	 * @return string|null
 	 */
-	public function getRealKey($key) {
-		if (isset($this->services[$key])) {
-			return $key;
-		}
-		if (isset($this->aliases[$key])) {
-			return $this->getRealKey($this->aliases[$key]);
-		}
-		return null;
-	}
-	
-	/* --------------------------------------------------------
-	 * Implements Countable
-	 * ----------------------------------------------------- */
-	
-	/**
-	 * Returns the number of services.
-	 * 
-	 * @return int
-	 */
-	public function count() {
-		return count($this->services);
-	}
-	
-	/* --------------------------------------------------------
-	 * Implements ArrayAccess
-	 * ----------------------------------------------------- */
-	
-	/**
-	 * Register a shared service.
-	 * 
-	 * @param string $key Dependency key.
-	 * @param mixed $value
-	 */
-	public function offsetSet($key, $value) {
-		$this->setShared($key, $value);
-	}
-	
-	/**
-	 * Resolves a service value.
-	 * 
-	 * @param string $key
-	 * 
-	 * @return mixed
-	 */
-	public function offsetGet($key) {
-		return $this->get($key);
-	}
-	
-	/**
-	 * Checks whether a service with the given key exists.
-	 * 
-	 * @param string $key
-	 * 
-	 * @return boolean
-	 */
-	public function offsetExists($key) {
-		return $this->has($key);
-	}
-	
-	/**
-	 * Removes the service given by $key.
-	 * 
-	 * @param string $key
-	 */
-	public function offsetUnset($key) {
-		$this->remove($key);
-	}
+	public function getRealKey($key);
 	
 	/* --------------------------------------------------------
 	 * Magic methods
@@ -328,33 +153,25 @@ class DI implements ArrayAccess, Countable
 	 * @param string $key
 	 * @param mixed $value
 	 */
-	public function __set($key, $value) {
-		$this->setShared($key, $value);
-	}
+	public function __set($key, $value);
 	
 	/**
 	 * @param string $key
 	 * 
 	 * @return mixed
 	 */
-	public function __get($key) {
-		return $this->get($key);
-	}
+	public function __get($key);
 	
 	/**
 	 * @param string $key
 	 * 
 	 * @return boolean
 	 */
-	public function __isset($key) {
-		return $this->has($key);
-	}
+	public function __isset($key);
 	
 	/**
 	 * @param string $key
 	 */
-	public function __unset($key) {
-		$this->remove($key);
-	}
+	public function __unset($key);
 	
 }

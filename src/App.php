@@ -27,14 +27,7 @@ class App implements ArrayAccess
 	 * 
 	 * @var \WordPress\Post\Post
 	 */
-	protected static $post;
-	
-	/**
-	 * Additional variables to make available in template files.
-	 * 
-	 * @var array
-	 */
-	protected $extraTemplateVars = array();
+	protected $post;
 	
 	/**
 	 * Path to the root installation directory with a trailing slash.
@@ -42,6 +35,13 @@ class App implements ArrayAccess
 	 * @var string
 	 */
 	protected $root;
+	
+	/**
+	 * Additional variables to make available in template files.
+	 * 
+	 * @var array
+	 */
+	protected $extraTemplateVars = array();
 	
 	/**
 	 * Creates the App instance.
@@ -57,7 +57,7 @@ class App implements ArrayAccess
 		}
 		
 		if (! isset($GLOBALS['root_dir'])) {
-			throw new RuntimeException("Missing 'root_dir' global variable.");
+			throw new RuntimeException("Missing 'root_dir' global.");
 		}
 		
 		static::$di = $di;
@@ -65,19 +65,38 @@ class App implements ArrayAccess
 		
 		$this->root = trailingslashit($GLOBALS['root_dir']);
 		
-		add_action('init', function() {
-			$this->get('customTypes')->load();
-		}, 100);
+		// "app.init" is fired at the highest (earliest) priority of "init"
+		add_action(
+			'init', 
+			function() { do_action('app.init', $this); }, 
+			-PHP_INT_MAX
+		);
 		
-		add_action('app.init', array($this, 'init'), PHP_INT_MAX);
-		
-		add_action('plugins_loaded', function() {
-			 do_action('app.init', $this);
-		}, PHP_INT_MAX);
+		// App::init() is bound at the lowest (latest) priority of "app.init"
+		add_action(
+			'app.init', 
+			array($this, 'init'), 
+			PHP_INT_MAX
+		);
 	}
 	
+	/**
+	 * Callback for "app.init" action - should not be invoked directly.
+	 */
 	public function init() {
-		$this->loadFile($this->getAppPath('init.php'));
+		
+		$dataManager = $this->get('dataManager');
+		$dataPath = $this->getCustomObjectsPath();
+		
+		foreach(array('post-types', 'statuses', 'taxonomies') as $__dir) {
+			if (is_dir($dataPath.$__dir)) {
+				foreach(glob($dataPath.$__dir.'/*.php') as $__file) {
+					$dataManager->register(include $__file);
+				}
+			}
+		}
+		
+		$this->includeFile($this->getAppPath('init.php'));
 	}
 	
 	/**
@@ -88,6 +107,10 @@ class App implements ArrayAccess
 	public static function instance() {
 		return static::$instance;
 	}
+	
+	/* --------------------------------------------------------
+	 *  Static DI methods
+	 * ----------------------------------------------------- */
 	
 	/**
 	 * Returns the DI instance.
@@ -120,6 +143,10 @@ class App implements ArrayAccess
 		static::$di->set($key, $value, $shared);
 	}
 	
+	/* --------------------------------------------------------
+	 *  Environment/site info helpers
+	 * ----------------------------------------------------- */
+	
 	/**
 	 * Returns the value of an environment variable.
 	 * 
@@ -151,8 +178,12 @@ class App implements ArrayAccess
 		return get_bloginfo('blogdescription');
 	}
 	
+	/* --------------------------------------------------------
+	 *  Paths
+	 * ----------------------------------------------------- */
+	
 	/**
-	 * Returns the path to the WordPress installation directory with a trailing slash.
+	 * Returns the path to the WordPress installation directory, with a trailing slash.
 	 * 
 	 * @param string $path [Optional]
 	 * 
@@ -163,7 +194,7 @@ class App implements ArrayAccess
 	}
 	
 	/**
-	 * Returns the path to the content directory with a trailing slash.
+	 * Returns the path to the content directory, with a trailing slash.
 	 * 
 	 * @param string $path [Optional]
 	 * 
@@ -174,7 +205,7 @@ class App implements ArrayAccess
 	}
 	
 	/**
-	 * Returns the path to the plugins directory with a trailing slash.
+	 * Returns the path to the plugins directory, with a trailing slash.
 	 * 
 	 * @return string
 	 */
@@ -183,7 +214,7 @@ class App implements ArrayAccess
 	}
 	
 	/**
-	 * Returns the path to the must-use plugins directory with a trailing slash.
+	 * Returns the path to the must-use plugins directory, with a trailing slash.
 	 * 
 	 * @return string
 	 */
@@ -192,7 +223,7 @@ class App implements ArrayAccess
 	}
 	
 	/**
-	 * Returns the path to the active theme directory with a trailing slash.
+	 * Returns the path to the active theme directory, with a trailing slash.
 	 * 
 	 * @return string
 	 */
@@ -201,8 +232,7 @@ class App implements ArrayAccess
 	}
 	
 	/**
-	 * Returns the path to the wp-admin directory with a trailing slash.
-	 * 
+	 * Returns the path to the wp-admin directory, with a trailing slash.
 	 * 
 	 * @param string $path [Optional]
 	 * 
@@ -213,7 +243,7 @@ class App implements ArrayAccess
 	}
 	
 	/**
-	 * Returns the path to the user application directory with a trailing slash.
+	 * Returns the path to the user 'app' directory, with a trailing slash.
 	 * 
 	 * @param string $path [Optional]
 	 * 
@@ -224,7 +254,7 @@ class App implements ArrayAccess
 	}
 	
 	/**
-	 * Returns the path to the user custom objects directory with a trailing slash.
+	 * Returns the path to the user custom objects directory, with a trailing slash.
 	 * 
 	 * @param string $path [Optional]
 	 * 
@@ -233,6 +263,10 @@ class App implements ArrayAccess
 	public function getCustomObjectsPath($path = '') {
 		return $this->getAppPath('custom/'.$path);
 	}
+	
+	/* --------------------------------------------------------
+	 *  URLs
+	 * ----------------------------------------------------- */
 	
 	/**
 	 * Returns the home URL.
@@ -256,8 +290,12 @@ class App implements ArrayAccess
 		return get_admin_url(null, $path, 'admin');
 	}
 	
+	/* --------------------------------------------------------
+	 *  Context
+	 * ----------------------------------------------------- */
+	
 	/**
-	 * Returns whether currently in admin area.
+	 * Checks whether currently in admin area.
 	 * 
 	 * @return boolean
 	 */
@@ -266,7 +304,7 @@ class App implements ArrayAccess
 	}
 	
 	/**
-	 * Whether WP_ENV === "development"
+	 * Checks whether WP_ENV === "development"
 	 * 
 	 * @return boolean
 	 */
@@ -275,67 +313,81 @@ class App implements ArrayAccess
 	}
 	
 	/**
+	 * Checks whether WP_ENV === "production"
+	 * 
+	 * @return boolean
+	 */
+	public function isProd() {
+		return WP_ENV === 'production';
+	}
+	
+	/* --------------------------------------------------------
+	 *  Scoped file include
+	 * ----------------------------------------------------- */
+	
+	/**
 	 * Loads a file with the App in scope.
 	 * 
 	 * 3 variables are made available in the file:
-	 *   $this  The WordPress\App instance
-	 *   $app   "   "
-	 *   $di    The WordPress\DI object
+	 *   $this  WordPress\App
+	 *   $app     "      "
+	 *   $di    WordPress\DI
 	 * 
 	 * @param string $__file
-	 * @param bool $strict [Optional] Default = false
+	 * @param boolean $strict [Optional] Default = false
 	 * 
 	 * @return mixed Value returned from file, if any
 	 */
-	public function loadFile($__file, $strict = false) {
+	public function includeFile($__file, $strict = false) {
+		
 		if (file_exists($__file)) {
 			$app = $this;
 			$di = $this->di();
 			return require $__file;
 		}
+		
 		if ($strict) {
 			throw new RuntimeException("Cannot load non-existant file: '$__file'");
 		}
 	}
 	
+	/* --------------------------------------------------------
+	 *  DI service accessors
+	 * ----------------------------------------------------- */
+	
 	/**
-	 * Returns the current custom post object.
+	 * Returns the current custom post instance.
 	 * 
-	 * @return \WordPress\Post\Post
+	 * @return \WordPress\Data\Post\Post
 	 */
 	public function getPost() {
-		if (! isset(static::$post) || static::$post->ID != $GLOBALS['post']->ID) {
-			static::$post = static::$di->get('postFactory')->create($GLOBALS['post']);
+		if (! isset($this->post) || $this->post->ID != $GLOBALS['post']->ID) {
+			$this->post = static::$di->get('posts')->getFactory()->create($GLOBALS['post']);
 		}
-		return static::$post;
+		return $this->post;
 	}
 	
 	/**
-	 * Returns the autoloader object.
+	 * Returns the Composer class autoloader instance.
 	 * 
-	 * @return \Xpl\ClassLoader
+	 * @return \Composer\Autoload\ClassLoader
 	 */
 	public function getAutoloader() {
 		return static::$di->get('autoloader');
 	}
 	
 	/**
-	 * Returns the environment object.
-	 * 
-	 * @return \WordPress\Env
-	 */
-	public function getEnv() {
-		return static::$di->get('env');
-	}
-	
-	/**
-	 * Returns the active theme object.
+	 * Returns the active theme instance.
 	 * 
 	 * @return \WordPress\Theme\ActiveTheme
 	 */
 	public function getTheme() {
 		return static::$di->get('theme');
 	}
+	
+	/* --------------------------------------------------------
+	 *  Extra template variables
+	 * ----------------------------------------------------- */
 	
 	/**
 	 * Sets a custom template variable that will be available in theme template files.
@@ -366,7 +418,7 @@ class App implements ArrayAccess
 	}
 	
 	/* --------------------------------------------------------
-	 * Implements ArrayAccess
+	 *  Implements ArrayAccess
 	 * ----------------------------------------------------- */
 	
 	/**

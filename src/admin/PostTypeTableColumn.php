@@ -7,20 +7,29 @@ use WP_Query;
 abstract class PostTypeTableColumn
 {	
 	protected $post_type;
+	protected $sortable;
 
-	public function __construct() {
-		$this->post_type = $this->getPostType();
-		add_filter("manage_edit-{$this->post_type}_columns", array($this, 'columns'));
-		add_action("manage_{$this->post_type}_posts_custom_column", array($this, 'content'), 10, 2);
-		if ($this->isSortable()) {
-			add_filter("manage_edit-{$this->post_type}_sortable_columns", array($this, 'sortable'));
+	public function __construct($post_type, $sortable = false) {
+		
+		$this->post_type = $post_type;
+		$this->sortable = $sortable;
+		
+		add_filter("manage_edit-{$post_type}_columns", array($this, 'columns'));
+		add_action("manage_{$post_type}_posts_custom_column", array($this, 'content'), 10, 2);
+		
+		if ($sortable) {
+			add_filter("manage_edit-{$post_type}_sortable_columns", array($this, 'sortable'));
 			add_action('pre_get_posts', array($this, 'orderby'));
 		}
 	}
 	
-	abstract public function getPostType();
+	public function getPostType() {
+		return $this->post_type;
+	}
 	
-	abstract public function isSortable();
+	public function isSortable() {
+		return $this->sortable;
+	}
 
 	public function columns($columns) {
 		return $columns;

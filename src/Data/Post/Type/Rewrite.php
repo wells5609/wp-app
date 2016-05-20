@@ -1,6 +1,6 @@
 <?php
 
-namespace WordPress\Post\Type;
+namespace WordPress\Data\Post\Type;
 
 abstract class Rewrite
 {

@@ -1,11 +1,12 @@
 <?php
 
-namespace WordPress\Post;
+namespace WordPress\Data\Post;
 
 use WP_Post;
 use WordPress\App;
+use WordPress\Data\Entity;
 
-class Post
+class Post extends Entity
 {	
 	public $ID;
 	public $post_author;
@@ -39,56 +40,50 @@ class Post
 	protected $uri;
 	protected $meta;
 	
-	public static function findAll(array $args) {
-		$posts = get_posts($args);
-		return empty($posts) ? null : array_map('custom_post', $posts);
+	public static function find(array $args) {
+		return di('posts')->find($args);
 	}
 	
 	public static function findOne(array $args) {
-		$posts = get_posts($args);
-		return empty($posts) ? null : custom_post(reset($posts));
+		return di('posts')->findOne($args);
 	}
 	
-	public function __construct($data) {
-		if (is_numeric($data)) {
+	public function __construct($data = null) {
+		if (isset($data) && is_numeric($data)) {
 			$data = get_post($data);
 		}
-		$this->import($data);
-		$this->uri = get_permalink($this->ID);
-		$this->onConstruct();
+		parent::__construct($data);
 	}
 	
-	public function __get($var) {
-		if (isset($this->$var)) {
+	public function hydrate($data) {
+		if ($data instanceof WP_Post) {
+			$data = $data->to_array();
+		}
+		parent::hydrate($data);
+	}
+	
+	public function getRepository() {
+		return di('posts');
+	}
+	
+	protected function propertyGet($var) {
+		if (property_exists($this, $var)) {
 			return $this->$var;
-		} else if (isset($this->{'post_'.$var})) {
+		} else if (property_exists($this, 'post_'.$var)) {
 			return $this->{'post_'.$var};
 		}
 		return null;
 	}
 	
-	public function __isset($var) {
-		return isset($this->$var) || isset($this->{'post_'.$var});
+	protected function propertyExists($var) {
+		return property_exists($this, $var) || property_exists($this, 'post_'.$var);
 	}
 	
-	public function __set($var, $value) {
+	protected function propertySet($var, $value) {
 		if (property_exists($this, $var)) {
 			$this->$var = $value;
 		} else if (property_exists($this, 'post_'.$var)) {
 			$this->{'post_'.$var} = $value;
-		}
-	}
-	
-	public function import($data) {
-		
-		if ($data instanceof WP_Post) {
-			$data = $data->to_array();
-		} else if (! is_array($data)) {
-			$data = (array)$data;
-		}
-		
-		foreach($data as $key => $value) {
-			$this->$key = $value;
 		}
 	}
 	
@@ -107,14 +102,17 @@ class Post
 			extract($wp_query->query_vars, EXTR_SKIP);
 		}
 		
-		if ($app->hasTemplateVars()) {
-			extract($app->getTemplateVars(), EXTR_SKIP);
-		}
+		#if ($app->hasTemplateVars()) {
+		#	extract($app->getTemplateVars(), EXTR_SKIP);
+		#}
 		
 		include $__file;
 	}
 	
 	public function getUri() {
+		if (! isset($this->uri) && isset($this->ID)) {
+			$this->uri = get_permalink($this->ID);
+		}
 		return $this->uri;
 	}
 	
@@ -127,7 +125,7 @@ class Post
 	}
 	
 	public function getTitleLink() {
-		return '<a href="'.esc_attr($this->uri).'">'.$this->post_title.'</a>';
+		return '<a href="'.esc_attr($this->getUri()).'">'.$this->post_title.'</a>';
 	}
 	
 	public function getMeta($key = null, $single = false) {
@@ -148,22 +146,12 @@ class Post
 		return null;
 	}
 	
-	public function update() {
-		return wp_update_post($this->toUpdateArray(), true);
-	}
-	
-	public function toArray() {
-		return get_object_vars($this);
-	}
-	
-	public function toUpdateArray() {
-		return get_object_public_vars($this);
+	public function save() {
+		return $this->getRepository()->save($this);
 	}
 	
 	public function __toString() {
 		return $this->post_title;
 	}
-	
-	protected function onConstruct() {}
 	
 }

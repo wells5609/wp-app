@@ -4,9 +4,9 @@ namespace WordPress\Database\Table;
 
 class Schema implements \Serializable
 {
-	const INTEGER = 'integer';
-	const DOUBLE = 'double';
-	const STRING = 'string';
+	const COLUMN_TYPE_INT = 'integer';
+	const COLUMN_TYPE_DOUBLE = 'double';
+	const COLUMN_TYPE_STRING = 'string';
 	
 	public $table_name;
 	public $name;
@@ -36,11 +36,11 @@ class Schema implements \Serializable
 	
 	public function getColumnFormatString($column) {
 		switch ($this->getColumnType($column)) {
-			case static::INTEGER:
+			case static::COLUMN_TYPE_INT:
 				return '%d';
-			case static::DOUBLE:
+			case static::COLUMN_TYPE_DOUBLE:
 				return '%f';
-			case static::STRING:
+			case static::COLUMN_TYPE_STRING:
 				return '%s';
 			default:
 				return null;
@@ -74,45 +74,27 @@ class Schema implements \Serializable
 	}
 	
 	public function isColumnInt($column) {
-		return $this->isColumnType($column, static::INTEGER);
+		return $this->isColumnType($column, static::COLUMN_TYPE_INT);
 	}
 	
 	public function isColumnDouble($column) {
-		return $this->isColumnType($column, static::DOUBLE);
+		return $this->isColumnType($column, static::COLUMN_TYPE_DOUBLE);
 	}
 	
 	public function isColumnString($column) {
-		return $this->isColumnType($column, static::STRING);
+		return $this->isColumnType($column, static::COLUMN_TYPE_STRING);
 	}
 	
 	public function build($rebuild = true) {
-		if ($this->built && ! $rebuild) {
-			return;
-		}
 		global $wpdb;
-		if (! isset($this->table_name)) {
-			$this->table_name = $wpdb->prefix.$this->name;
-		}
-		$this->columnTypes = array();
-		foreach($this->columns as $name => $str) {
-			if (stripos($str, 'int') !== false || stripos($str, 'time') !== false) {
-				$this->columnTypes[$name] = static::INTEGER;
-			} else if (stripos($str, 'float') !== false) {
-				$this->columnTypes[$name] = static::DOUBLE;
-			} else {
-				$this->columnTypes[$name] = static::STRING;
+		if (! $this->built || $rebuild === true) {
+			if (! isset($this->table_name)) {
+				$this->table_name = $wpdb->prefix.$this->name;
 			}
+			$this->detectColumnTypes();
+			$this->detectTableInstallStatus();
+			$this->built = true;
 		}
-		foreach($wpdb->get_col('SHOW TABLES', 0) as $tbl) {
-			if ($tbl === $this->table_name) {
-				$this->installed = true;
-				break;
-			}
-		}
-		if (! $this->installed && $this->auto_install) {
-			$this->install();
-		}
-		$this->built = true;
 	}
 	
 	public function isInstalled() {
@@ -137,6 +119,32 @@ class Schema implements \Serializable
 	public function unserialize($serial) {
 		foreach(unserialize($serial) as $key => $value) {
 			$this->$key = $value;
+		}
+	}
+	
+	protected function detectColumnTypes() {
+		$this->columnTypes = array();
+		foreach($this->columns as $name => $str) {
+			if (stripos($str, 'int') !== false || stripos($str, 'time') !== false) {
+				$this->columnTypes[$name] = static::COLUMN_TYPE_INT;
+			} else if (stripos($str, 'float') !== false) {
+				$this->columnTypes[$name] = static::COLUMN_TYPE_DOUBLE;
+			} else {
+				$this->columnTypes[$name] = static::COLUMN_TYPE_STRING;
+			}
+		}
+	}
+	
+	protected function detectTableInstallStatus() {
+		global $wpdb;
+		foreach($wpdb->get_col('SHOW TABLES', 0) as $tbl) {
+			if ($tbl === $this->table_name) {
+				$this->installed = true;
+				return;
+			}
+		}
+		if (! $this->installed && $this->auto_install) {
+			$this->install();
 		}
 	}
 	
