@@ -1,6 +1,6 @@
 <?php
 
-namespace WordPress\Data\Taxonomy;
+namespace WordPress\Data\Term;
 
 use WordPress\Data\Entity;
 

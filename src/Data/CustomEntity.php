@@ -4,6 +4,9 @@ namespace WordPress\Data;
 
 use RuntimeException;
 
+/**
+ * Base class for custom (non-core) entities stored in the WordPress database.
+ */
 class CustomEntity extends Entity
 {
 	
@@ -39,7 +42,7 @@ class CustomEntity extends Entity
 	 * 
 	 * @return boolean
 	 */
-	public function insert($data = null) {	
+	public function save($data = null) {	
 		if (! isset($this->_repository)) {
 			throw new RuntimeException("Cannot insert: entity is missing storage repo");
 		}

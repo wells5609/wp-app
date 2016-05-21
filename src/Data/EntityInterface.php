@@ -2,6 +2,9 @@
 
 namespace WordPress\Data;
 
+/**
+ * Contract for a WordPress object model entity.
+ */
 interface EntityInterface extends \ArrayAccess, \Serializable
 {
 	
@@ -40,7 +43,4 @@ interface EntityInterface extends \ArrayAccess, \Serializable
 	 */
 	public function getRepository();
 	
-	//public function insert($data = null);
-	//public function update($data = null);
-	//public function delete();
 }

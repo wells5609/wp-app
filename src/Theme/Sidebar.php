@@ -64,7 +64,8 @@ class Sidebar
 		} else {
 			$this->display = true;
 		}
-		return apply_filters('theme/display_sidebar', $this->display);
+		$this->display = apply_filters('theme/display_sidebar', $this->display);
+		return $this->display;
 	}
 	
 	protected function checkConditionals() {

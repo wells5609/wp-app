@@ -2,34 +2,45 @@
 
 namespace WordPress\Database;
 
+use WordPress\Database\Table\Schema;
 use WordPress\Data\RepositoryInterface;
 use WordPress\Data\EntityInterface;
-use WordPress\Database\Table\Schema;
+use WordPress\Data\CustomEntity;
 use RuntimeException;
 use InvalidArgumentException;
 
+/**
+ * Data repository for non-core object types stored in the WP database.
+ */
 class Repository implements RepositoryInterface
 {
 	
 	/**
+	 * Table schema instance.
+	 * 
 	 * @var \WordPress\Database\Table\Schema
 	 */
 	protected $schema;
 	
 	/**
+	 * WordPress database instance.
+	 * 
 	 * @var \wpdb
 	 */
 	protected $db;
 	
 	/**
 	 * Constructor.
+	 * 
+	 * @param \WordPress\Database\Table\Schema $schema
 	 */
 	public function __construct(Schema $schema) {
 		$this->initialize($schema);
 	}
 	
 	/**
-	 * Returns the Schema
+	 * Returns the database table schema.
+	 * 
 	 * @return \WordPress\Database\Table\Schema
 	 */
 	public function getSchema() {
@@ -54,23 +65,21 @@ class Repository implements RepositoryInterface
 	 */
 	public function find($where = null) {
 		
-		$sql_wheres = $sql_args = array();
+		$sql = "SELECT * FROM {$this->schema->table_name}";
+		$wheres = $arguments = array();
 		
-		foreach((array)$where as $field => $arg) {
-			$this->assertValidWhereArgument($field, $arg, __FUNCTION__);
-			$sql_wheres[] = "{$field} = ".$this->schema->getColumnFormatString($field);
-			$sql_args[] = $arg;
+		if ($where) {
+			foreach((array)$where as $field => $arg) {
+				$this->assertValidWhereArgument($field, $arg, __FUNCTION__);
+				$wheres[] = "{$field} = ".$this->schema->getColumnFormatString($field);
+				$arguments[] = $arg;
+			}
+			$sql .= ' WHERE '.implode(' AND ', $wheres);
 		}
 		
-		$sql = "SELECT * FROM {$this->schema->table_name} WHERE ".implode(' AND ', $sql_wheres);
+		$results = $this->db->get_results($this->db->prepare($sql, $arguments));
 		
-		$results = $this->db->get_results($this->db->prepare($sql, $sql_args));
-		
-		if (empty($results)) {
-			return array();
-		}
-		
-		return array_map(array($this, 'forgeObject'), $results);
+		return empty($results) ? array() : array_map(array($this, 'forgeObject'), $results);
 	}
 	
 	/**
@@ -82,17 +91,18 @@ class Repository implements RepositoryInterface
 	 */
 	public function findOne($where) {
 		
-		$sql_wheres = $sql_args = array();
+		$sql = "SELECT * FROM {$this->schema->table_name}";
+		$wheres = $arguments = array();
 		
 		foreach((array)$where as $field => $arg) {
 			$this->assertValidWhereArgument($field, $arg, __FUNCTION__);
-			$sql_wheres[] = "{$field} = ".$this->schema->getColumnFormatString($field);
-			$sql_args[] = $arg;
+			$wheres[] = $field.' = '.$this->schema->getColumnFormatString($field);
+			$arguments[] = $arg;
 		}
 		
-		$sql = "SELECT * FROM {$this->schema->table_name} WHERE ".implode(" AND ", $sql_wheres);
+		$sql .= ' WHERE '.implode(' AND ', $wheres);
 		
-		$results = $this->db->get_row($this->db->prepare($sql, $sql_args));
+		$results = $this->db->get_row($this->db->prepare($sql, $arguments));
 		
 		return empty($results) ? null : $this->forgeObject($results);
 	}
@@ -116,7 +126,7 @@ class Repository implements RepositoryInterface
 		$entityPkValue = $data[$pk];
 		unset($data[$pk]);
 		
-		return $this->update($data, array($pk => $entityPkValue));
+		return $this->updateRow($data, array($pk => $entityPkValue));
 	}
 	
 	/**
@@ -127,54 +137,52 @@ class Repository implements RepositoryInterface
 	 * @return int
 	 */
 	public function delete(EntityInterface $entity) {
+		
 		$pk = $this->schema->primary_key;
+		
 		if (! isset($entity->$pk)) {
-			throw new RuntimeException("Cannot delete entity: missing value of primary key ({$pk}).");
+			throw new RuntimeException(sprintf(
+				'Cannot delete entity: missing value of primary key ("%s")', $pk
+			));
 		}
-		return $this->deleteWhere(array($pk => $entity->$pk));
+		
+		return $this->deleteRow(array($pk => $entity->$pk));
 	}
 	
 	/**
 	 * Queries the database using a post extension field (i.e. column)
 	 *
-	 * @param string $field The field (column) to query by
-	 * @param string $field_where The arguments for the field queried by
-	 * @param string $select The SQL "SELECT" string
-	 * @param array $extra_where Additional "WHERE" arguments as assoc. array.
+	 * @param string $field The field (column) to query by.
+	 * @param string $value The value for the field queried by.
+	 * @param array $where Additional "WHERE" arguments as associative array.
+	 * 
 	 * @return mixed
 	*/	
-	public function findOneBy($column, $column_where, $select = '*', array $extra_where = array()) {
+	public function findOneBy($column, $value, array $where = array()) {
 					
-		$this->assertValidWhereArgument($column, $column_where, __FUNCTION__);
+		$this->assertValidWhereArgument($column, $value, __FUNCTION__);
 		
-		$sql_args = array($column_where);
+		$sql = "SELECT * FROM {$this->schema->table_name} WHERE {$column} = "
+			.$this->schema->getColumnFormatString($column);
 		
-		if (is_array($select)) {
-			$select = implode(', ', $select);
-		}
+		$arguments = array($value);
 		
-		$colFormatString = $this->schema->getColumnFormatString($column);
-		
-		$sql = "SELECT $select FROM {$this->schema->table_name} WHERE $column = $colFormatString";
-		
-		if (! empty($extra_where)) {
+		if (! empty($where)) {
 			
 			$sql .= ' AND ';
-			$wheres = $where_vals = array();
+			$wheres = $whereArgs = array();
 			
-			foreach($extra_where as $col => $val) {				
-				$this->assertValidWhereArgument($col, $val, __FUNCTION__);
-				$format = $this->schema->getColumnFormatString($col);
-				$wheres[] = "$col = $format";
-				$where_vals[] = $val;
+			foreach($where as $_column => $_value) {				
+				$this->assertValidWhereArgument($_column, $_value, __FUNCTION__);
+				$wheres[] = $_column.' = '.$this->schema->getColumnFormatString($_column);
+				$whereArgs[] = $_value;
 			}
 			
-			$sql .= implode(" AND ", $wheres);
-			
-			$sql_args = array_merge($sql_args, $where_vals);
+			$sql .= implode(' AND ', $wheres);
+			$arguments = array_merge($arguments, $whereArgs);
 		}
 		
-		$results = $this->db->get_row($this->db->prepare($sql, $sql_args));
+		$results = $this->db->get_row($this->db->prepare($sql, $arguments));
 		
 		return empty($results) ? null : $this->forgeObject($results);
 	}
@@ -183,7 +191,7 @@ class Repository implements RepositoryInterface
 	 * Returns a row by primary key.
 	 * 
 	 * @param mixed $pk
-	 * @param string $select [Optional] Default = "*"
+	 * 
 	 * @return mixed
 	 */
 	public function findOneByPrimaryKey($pk) {
@@ -199,6 +207,7 @@ class Repository implements RepositoryInterface
 	 * @param mixed $value
 	 * @param array $where
 	 * @param boolean $force_exists [Optional] Default = true
+	 * 
 	 * @return mixed
 	 */
 	public function updateVar($name, $value, array $where, $force_exists = true) {
@@ -206,7 +215,7 @@ class Repository implements RepositoryInterface
 			$exists = $this->findOne($where, $name);
 			if ($exists) return false;
 		}
-		return $this->update(array($name => $value), $where);		
+		return $this->updateRow(array($name => $value), $where);		
 	}
 	
 	/**
@@ -214,7 +223,7 @@ class Repository implements RepositoryInterface
 	 *
 	 * @see wpdb::insert()
 	 */
-	public function insert($data, $format = null) {
+	public function insertRow($data, $format = null) {
 		return $this->db->insert($this->schema->table_name, $data, $format);
 	}
 	
@@ -223,7 +232,7 @@ class Repository implements RepositoryInterface
 	 *
 	 * @see wpdb::replace()
 	 */
-	public function replace($data, $format = null) {
+	public function replaceRow($data, $format = null) {
 		return $this->db->replace($this->schema->table_name, $data, $format, 'REPLACE');
 	}
 
@@ -232,7 +241,7 @@ class Repository implements RepositoryInterface
 	 *
 	 * @see wpdb::update()
 	 */
-	 public function update($data, $where, $format = null, $where_format = null) {
+	 public function updateRow($data, $where, $format = null, $where_format = null) {
 		return $this->db->update($this->schema->table_name, $data, $where, $format, $where_format);
 	}
 
@@ -241,7 +250,7 @@ class Repository implements RepositoryInterface
 	 *
 	 * @see wpdb::delete()
 	 */
-	public function deleteWhere($where, $where_format = null) {
+	public function deleteRow($where, $where_format = null) {
 		return $this->db->delete($this->schema->table_name, $where, $where_format);
 	}
 	
@@ -318,6 +327,7 @@ class Repository implements RepositoryInterface
 	 * Creates and returns an object
 	 *
 	 * @param object $data Row data from the database
+	 * 
 	 * @return object
 	 */
 	public function forgeObject($data) {
@@ -329,7 +339,7 @@ class Repository implements RepositoryInterface
 		$class = $this->schema->object_class;
 		$object = new $class($data);
 		
-		if ($object instanceof Entity) {
+		if ($object instanceof CustomEntity) {
 			$object->setRepository($this);
 		}
 		
@@ -348,10 +358,9 @@ class Repository implements RepositoryInterface
 	protected function initialize(Schema $schema) {
 		$this->db = $GLOBALS['wpdb'];
 		$this->schema = $schema;
-		if (! isset($this->schema->table_name)) {
-			$this->schema->table_name = $this->db->prefix.$this->schema->name;
+		if (! $this->schema->isBuilt()) {
+			$this->schema->build();
 		}
-		$schema->build();
 	}
 	
 	protected function assertValidWhereArgument($field, $value, $source) {

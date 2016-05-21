@@ -2,11 +2,14 @@
 
 namespace WordPress\Data;
 
+/**
+ * Contract for a storage "gateway" for a single entity type.
+ */
 interface RepositoryInterface 
 {
 	
 	/**
-	 * Returns the repository's entity type name.
+	 * Returns the name of the entity type stored by the repository.
 	 * 
 	 * @return string
 	 */

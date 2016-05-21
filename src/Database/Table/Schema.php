@@ -2,6 +2,9 @@
 
 namespace WordPress\Database\Table;
 
+/**
+ * Defines a custom table in the WP database.
+ */
 class Schema implements \Serializable
 {
 	const COLUMN_TYPE_INT = 'integer';
@@ -30,8 +33,32 @@ class Schema implements \Serializable
 	}
 	
 	public function getColumnType($column) {
-		$this->build(false);
+		if (! $this->built) {
+			$this->build();
+		}
 		return isset($this->columnTypes[$column]) ? $this->columnTypes[$column] : null;
+	}
+	
+	public function isColumnType($column, $type) {
+		if (! $this->built) {
+			$this->build();
+		}
+		if (isset($this->columnTypes[$column])) {
+			return $this->columnTypes[$column] === $type;
+		}
+		return false;
+	}
+	
+	public function isColumnInt($column) {
+		return $this->isColumnType($column, static::COLUMN_TYPE_INT);
+	}
+	
+	public function isColumnDouble($column) {
+		return $this->isColumnType($column, static::COLUMN_TYPE_DOUBLE);
+	}
+	
+	public function isColumnString($column) {
+		return $this->isColumnType($column, static::COLUMN_TYPE_STRING);
 	}
 	
 	public function getColumnFormatString($column) {
@@ -55,8 +82,8 @@ class Schema implements \Serializable
 		if (strpos($field, '(') === false) {
 			return null;
 		}
-		$_start = strpos($field, '(') + 1;
-		$length = substr($field, $_start, strpos($field, ')') - $_start );
+		$start = strpos($field, '(') + 1;
+		$length = substr($field, $start, strpos($field, ')') - $start);
 		// Floats can have two max lengths: (3,5) => 123.12345
 		if (strpos($length, ',') !== false) {
 			$arr = explode(',', $length);
@@ -65,47 +92,29 @@ class Schema implements \Serializable
 		return (int)$length;
 	}
 	
-	public function isColumnType($column, $type) {
-		$this->build(false);
-		if (isset($this->columnTypes[$column])) {
-			return $this->columnTypes[$column] === $type;
-		}
-		return false;
-	}
-	
-	public function isColumnInt($column) {
-		return $this->isColumnType($column, static::COLUMN_TYPE_INT);
-	}
-	
-	public function isColumnDouble($column) {
-		return $this->isColumnType($column, static::COLUMN_TYPE_DOUBLE);
-	}
-	
-	public function isColumnString($column) {
-		return $this->isColumnType($column, static::COLUMN_TYPE_STRING);
-	}
-	
-	public function build($rebuild = true) {
-		global $wpdb;
-		if (! $this->built || $rebuild === true) {
-			if (! isset($this->table_name)) {
-				$this->table_name = $wpdb->prefix.$this->name;
-			}
-			$this->detectColumnTypes();
-			$this->detectTableInstallStatus();
-			$this->built = true;
-		}
+	public function isBuilt() {
+		return $this->built;
 	}
 	
 	public function isInstalled() {
-		$this->build(false);
+		if (! $this->built) {
+			$this->build();
+		}
 		return $this->installed;
+	}
+	
+	public function build() {
+		$this->table_name = $GLOBALS['wpdb']->prefix.$this->name;
+		$this->detectColumnTypes();
+		$this->detectTableInstallStatus();
+		$this->built = true;
 	}
 	
 	public function install() {
 		if (! $this->installed) {
-			$alter = new Alter($this);
-			if ($alter->install()) {
+			$install = new Command\Create($this);
+			$install();
+			if ($install->success()) {
 				$this->installed = true;
 			}
 		}
@@ -136,8 +145,7 @@ class Schema implements \Serializable
 	}
 	
 	protected function detectTableInstallStatus() {
-		global $wpdb;
-		foreach($wpdb->get_col('SHOW TABLES', 0) as $tbl) {
+		foreach($GLOBALS['wpdb']->get_col('SHOW TABLES', 0) as $tbl) {
 			if ($tbl === $this->table_name) {
 				$this->installed = true;
 				return;

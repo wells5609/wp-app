@@ -3,14 +3,20 @@
 namespace WordPress\Data;
 
 use WordPress\Data\Post\Type as PostType;
-use WordPress\Data\Post\Repository as PostRepository;
 use WordPress\Data\Taxonomy\Type as Taxonomy;
+use WordPress\Data\Post\Repository as PostRepository;
 use WordPress\Data\Taxonomy\Repository as TaxonomyRepository;
 use WordPress\Data\Term\Repository as TermRepository;
+use WordPress\Data\User\Repository as UserRepository;
 use WordPress\Database\Table\Schema;
 use WordPress\Database\Repository as DatabaseRepository;
 use InvalidArgumentException;
 
+/**
+ * Container for all entity repositories.
+ * 
+ * Handles registration of custom core object types (i.e. post types and taxonomies).
+ */
 class Manager
 {
 	
@@ -21,11 +27,13 @@ class Manager
 	public function __construct(
 		PostRepository $postRepository, 
 		TaxonomyRepository $taxonomyRepository,
-		TermRepository $termRepository
+		TermRepository $termRepository,
+		UserRepository $userRepository
 	) {
 		$this->addRepository($postRepository);
 		$this->addRepository($taxonomyRepository);
 		$this->addRepository($termRepository);
+		$this->addRepository($userRepository);
 	}
 	
 	public function addRepository(RepositoryInterface $repository) {
@@ -42,8 +50,8 @@ class Manager
 	public function register($object) {
 		if ($object instanceof PostType) {
 			$this->registerPostType($object);
-		#} else if ($object instanceof Taxonomy) {
-		#	$this->registerTaxonomy($object);
+		} else if ($object instanceof Taxonomy) {
+			$this->registerTaxonomy($object);
 		} else if ($object instanceof Schema) {
 			$this->registerDataType($object);
 		} else {

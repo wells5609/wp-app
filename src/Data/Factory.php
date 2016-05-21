@@ -2,6 +2,9 @@
 
 namespace WordPress\Data;
 
+/**
+ * Creates entity instances of a single type.
+ */
 abstract class Factory
 {
 	

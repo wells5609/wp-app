@@ -4,6 +4,9 @@ namespace WordPress\Data;
 
 use BadMethodCallException;
 
+/**
+ * Abstract implementation of an WordPress object model entity.
+ */
 abstract class Entity implements EntityInterface
 {
 	
