@@ -75,6 +75,9 @@ class Repository implements RepositoryInterface
 				$arguments[] = $arg;
 			}
 			$sql .= ' WHERE '.implode(' AND ', $wheres);
+		} else {
+			$sql .= ' WHERE 1=%d';
+			$arguments = array('1');
 		}
 		
 		$results = $this->db->get_results($this->db->prepare($sql, $arguments));
@@ -120,7 +123,7 @@ class Repository implements RepositoryInterface
 		$pk = $this->schema->primary_key;
 		
 		if (! isset($data[$pk])) {
-			return $this->insert($data);
+			return $this->insertRow($data);
 		}
 		
 		$entityPkValue = $data[$pk];

@@ -1,0 +1,16 @@
+{
+  "name": "some_plugin",
+  "type": "wordpress-plugin",
+  "license": "MIT",
+  "description": "Description here...",
+  "authors": [
+    {
+      "name": "Wells",
+      "homepage": "https://github.com/wells5609"
+    }
+  ],
+  "keywords": ["wordpress", "wp", "oopress"],
+  "require": {
+    "composer/installers": "~1.0"
+  }
+}

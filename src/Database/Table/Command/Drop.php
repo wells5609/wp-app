@@ -4,35 +4,17 @@ namespace WordPress\Database\Table\Command;
 
 use WordPress\Database\Table\Command;
 
-/**
- * DROP TABLE command.
- */
 class Drop extends Command
 {
 	
-	private $success;
-	
-	public function success() {
-		return $this->success;
-	}
-	
 	public function __invoke() {
-		
-		global $wpdb;
-		
-		foreach ($wpdb->get_col("SHOW TABLES", 0) as $table) {
-			if ($table == $this->schema->name) {
-				$wpdb->query($this->sql());
-				break;
-			}
+		$name = $this->table->getTableName();
+		if (! $this->table->isInstalled()) {
+			return true;
 		}
-		
-		$this->success = ! in_array($this->schema->name, $wpdb->get_col("SHOW_TABLES", 0));
-	}
-	
-	public function sql() {
-		global $wpdb;
-		return "DROP TABLE {$wpdb->prefix}{$this->schema->name}";
+		$connection = $this->table->getConnection();
+		$connection->query("DROP TABLE $name");
+		return ! in_array($name, $connection->getTableNames(true));
 	}
 	
 }

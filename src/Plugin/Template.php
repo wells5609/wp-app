@@ -10,7 +10,7 @@ abstract class Template
 	 *
 	 * @var string
 	 */
-	protected $slug = 'my-plugin';
+	protected $slug;
 	
 	protected $admin_page_title = '';
 	protected $admin_menu_title = '';
@@ -43,6 +43,7 @@ abstract class Template
 		
 		$this->path = plugin_dir_path(__FILE__);
 		$this->url  = plugin_dir_url(__FILE__);
+		$this->slug = $this->slug ?: basename($this->path);
 		
 		load_plugin_textdomain($this->slug, false, $this->path.'lang/');
 

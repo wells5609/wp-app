@@ -2,55 +2,52 @@
 
 namespace WordPress\Data;
 
-/**
- * Creates entity instances of a single type.
- */
-abstract class Factory
+class Factory implements FactoryInterface
 {
-	
-	protected $defaultClass;
-	protected $classCallback;
-	protected $classes = array();
-	
-	public function setDefaultClass($class) {
-		$this->defaultClass = $class;
+
+	protected $type;
+
+	/**
+	 * Constructor.
+	 *
+	 * @param string $modelClass [Optional] Default = 'WordPress\Data\Model'
+	 */
+	public function __construct(Type $type) {
+		$this->type = $type;
+	}
+
+	/**
+	 * Returns the associated Type object.
+	 *
+	 * @return \WordPress\Data\Type
+	 */
+	public function getType() {
+		return $this->type;
+	}
+
+	/**
+	 * Creates a new model.
+	 *
+	 * @param mixed $data [Optional]
+	 *
+	 * @return \WordPress\Data\ModelInterface
+	 */
+	public function create($data = null) {
+		$class = $this->type->getModelClassname();
+		$object = new $class($data);
+		$object->setModelStorage($this->type->getStorage());
+		return $object;
 	}
 	
-	public function getDefaultClass() {
-		return $this->defaultClass;
-	}
-	
-	public function setClassCallback($callback) {
-		$this->classCallback = $callback;
-	}
-	
-	public function getClassCallback() {
-		return $this->classCallback;
-	}
-	
-	public function setClass($type, $class) {
-		$this->classes[$type] = $class;
-	}
-	
-	public function getClass($type) {	
-		if (isset($this->classes[$type])) {
-			return $this->classes[$type];
-		}
-		if (isset($this->classCallback)) {
-			return call_user_func($this->classCallback, $type);
-		}
-		return $this->defaultClass;
-	}
-	
-	public function getClasses() {
-		return $this->classes;
-	}
-	
-	public function __invoke($data = null, $class = null) {
-		if (! $class) {
-			$class = $this->getDefaultClass();
-		}
-		return new $class($data);
+	/**
+	 * Creates an array of models.
+	 * 
+	 * @param array $data
+	 * 
+	 * @return \WordPress\Data\ModelInterface[]
+	 */
+	public function createArray(array $data) {
+		return array_map(array($this, 'create'), $data);
 	}
 	
 }

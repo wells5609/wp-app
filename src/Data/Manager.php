@@ -2,84 +2,107 @@
 
 namespace WordPress\Data;
 
-use WordPress\Data\Post\Type as PostType;
-use WordPress\Data\Taxonomy\Type as Taxonomy;
-use WordPress\Data\Post\Repository as PostRepository;
-use WordPress\Data\Taxonomy\Repository as TaxonomyRepository;
-use WordPress\Data\Term\Repository as TermRepository;
-use WordPress\Data\User\Repository as UserRepository;
-use WordPress\Database\Table\Schema;
-use WordPress\Database\Repository as DatabaseRepository;
-use InvalidArgumentException;
-
-/**
- * Container for all entity repositories.
- * 
- * Handles registration of custom core object types (i.e. post types and taxonomies).
- */
 class Manager
 {
 	
-	protected $repositories = array();
-	protected $customPostTypes = array();
-	protected $customTaxonomies = array();
+	/**
+	 * Registered data types.
+	 * 
+	 * @var \WordPress\Data\Type[]
+	 */
+	protected $types = array();
 	
-	public function __construct(
-		PostRepository $postRepository, 
-		TaxonomyRepository $taxonomyRepository,
-		TermRepository $termRepository,
-		UserRepository $userRepository
-	) {
-		$this->addRepository($postRepository);
-		$this->addRepository($taxonomyRepository);
-		$this->addRepository($termRepository);
-		$this->addRepository($userRepository);
+	/**
+	 * Storage containers.
+	 * 
+	 * @var \WordPress\Data\StorageInterface[]
+	 */
+	protected $storage = array();
+	
+	/**
+	 * Registers a data type.
+	 * 
+	 * @param \WordPress\Data\Type $type
+	 * 
+	 * @return \WordPress\Data\Manager
+	 */
+	public function register(Type $type) {
+		$this->types[$type->getName()] = $type;
+		return $this;
 	}
 	
-	public function addRepository(RepositoryInterface $repository) {
-		$this->repositories[$repository->getEntityTypeName()] = $repository;
-	}
-	
-	public function getRepository($type) {
-		if ($type instanceof EntityInterface) {
-			return $type->getRepository();
+	/**
+	 * Checks whether a given data type has been registered.
+	 * 
+	 * @param string|\WordPress\Data\Type $type
+	 * 
+	 * @return boolean
+	 */
+	public function isRegistered($type) {
+		if ($type instanceof Type) {
+			return in_array($type, $this->types, true);
 		}
-		return isset($this->repositories[$type]) ? $this->repositories[$type] : null;
+		return isset($this->types[$type]);
 	}
 	
-	public function register($object) {
-		if ($object instanceof PostType) {
-			$this->registerPostType($object);
-		} else if ($object instanceof Taxonomy) {
-			$this->registerTaxonomy($object);
-		} else if ($object instanceof Schema) {
-			$this->registerDataType($object);
-		} else {
-			throw new InvalidArgumentException("Invalid data type: ".get_class($object));
+	/**
+	 * Returns a registered Type by name.
+	 * 
+	 * @param string $name
+	 * 
+	 * @return \WordPress\Data\Type|null
+	 */
+	public function getType($name) {
+		return isset($this->types[$name]) ? $this->types[$name] : null;
+	}
+	
+	/**
+	 * Attempts to locate the Type associated with a given model.
+	 * 
+	 * @param \WordPress\Data\ModelInterface $model
+	 * 
+	 * @return \WordPress\Data\Type|null
+	 */
+	public function getModelType(ModelInterface $model) {
+		$class = get_class($model);
+		foreach($this->types as $name => $type) {
+			if ($type->getModelClassname() === $class) {
+				return $type;
+			}
 		}
 	}
 	
-	public function registerDataType(Schema $schema, DatabaseRepository $repository = null) {
-		if (! isset($repository)) {
-			$repository = new DatabaseRepository($schema);
-		}
-		$this->repositories[$schema->name] = $repository;
+	/**
+	 * Registers a storage container.
+	 * 
+	 * @param \WordPress\Data\StorageInterface $storage
+	 * 
+	 * @return \WordPress\Data\Manager
+	 */
+	public function addStorage(StorageInterface $storage) {
+		$this->storage[$storage->getName()] = $storage;
+		return $this;
 	}
 	
-	public function registerPostType(PostType $type) {
-		$type->register();
-		if (isset($type->class)) {
-			$this->getRepository('post')->getFactory()->setClass($type->slug, $type->class);
-		}	
-		$this->customPostTypes[$type->slug] = $type;
-	}
-	
-	public function registerTaxonomy(Taxonomy $taxonomy) {
-		$taxonomy->register();
-		if (isset($taxonomy->class)) {
-			$this->getRepository('taxonomy')->getFactory()->setClass($taxonomy->slug, $taxonomy->class);
+	/**
+	 * Returns a storage container for the given type.
+	 * 
+	 * @param string|\WordPress\Data\Type $type
+	 * 
+	 * @return \WordPress\Data\StorageInterface|null
+	 */
+	public function getStorage($type) {
+		if ($type instanceof Type) {
+			$type = $type->getName();
 		}
-		$this->customTaxonomies[$taxonomy->slug] = $taxonomy;
+		$storage = null;
+		if (isset($this->storage[$type])) {
+			$storage = $this->storage[$type];
+		} else if ($type = $this->getType($type)) {
+			$storage = $type->createStorage();
+			$this->addStorage($storage);
+		}
+		return $storage;
 	}
 	
 }
